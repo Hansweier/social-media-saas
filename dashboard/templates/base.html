@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -55,6 +56,14 @@
       top: 0; left: 0;
       height: 100vh;
       z-index: 10;
+    }
+    .sidebar::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 180px;
+      background: linear-gradient(180deg, rgba(203,166,247,.04) 0%, transparent 100%);
+      pointer-events: none;
     }
 
     /* Nuna — Maskottchen */
@@ -116,23 +125,34 @@
       display: flex;
       align-items: center;
       gap: 9px;
-      padding: 7px 14px;
+      padding: 7px 12px;
       margin: 1px 8px;
       border-radius: 8px;
       color: var(--muted);
       text-decoration: none;
       font-size: 13px;
       font-weight: 500;
-      transition: all .12s ease;
+      transition: all .15s cubic-bezier(.4,0,.2,1);
+      border-left: 2px solid transparent;
+      position: relative;
     }
-    nav a:hover { color: var(--text); background: rgba(203,166,247,.08); }
+    nav a:hover {
+      color: var(--text);
+      background: rgba(203,166,247,.07);
+      border-left-color: rgba(203,166,247,.3);
+    }
     nav a.active {
       color: var(--accent);
-      background: rgba(203,166,247,.12);
+      background: rgba(203,166,247,.1);
       font-weight: 600;
+      border-left-color: var(--accent);
     }
-    nav a.active .nav-icon { filter: none; }
-    nav a .nav-icon { font-size: 14px; width: 17px; text-align: center; opacity: .8; }
+    nav a .nav-icon {
+      width: 16px; height: 16px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; opacity: .65;
+    }
+    nav a:hover .nav-icon { opacity: .9; }
     nav a.active .nav-icon { opacity: 1; }
 
     /* Sidebar footer */
@@ -177,15 +197,18 @@
     .page-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; letter-spacing: -.02em; }
     .page-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
 
-    /* ── Cards (Glassmorphism-light) ── */
+    /* ── Cards ── */
     .card {
       background: var(--surface);
       border: 1px solid rgba(203,166,247,.1);
       border-radius: 12px;
       padding: 20px;
-      transition: border-color .15s;
+      transition: border-color .2s, box-shadow .2s;
     }
-    .card:hover { border-color: rgba(203,166,247,.18); }
+    .card:hover {
+      border-color: rgba(203,166,247,.22);
+      box-shadow: 0 4px 20px rgba(203,166,247,.08);
+    }
     .card-title {
       font-size: 10.5px;
       text-transform: uppercase;
@@ -371,6 +394,14 @@
     input[type="text"], input[type="password"], input[type="email"],
     input[type="datetime-local"], input[type="search"], select, textarea {
       font-family: 'Inter', inherit;
+      transition: border-color .15s, box-shadow .15s;
+      outline: none;
+    }
+    input[type="text"]:focus, input[type="password"]:focus,
+    input[type="email"]:focus, input[type="datetime-local"]:focus,
+    input[type="search"]:focus, select:focus, textarea:focus {
+      border-color: rgba(203,166,247,.6) !important;
+      box-shadow: 0 0 0 3px rgba(203,166,247,.1);
     }
   </style>
   {% block extra_head %}{% endblock %}
@@ -452,38 +483,35 @@
   <nav>
     <div class="sidebar-section">Content</div>
     <a href="/"               class="{{ 'active' if request.path == '/' else '' }}">
-      <span class="nav-icon">⬡</span> Übersicht
+      <span class="nav-icon"><i data-lucide="layout-dashboard"></i></span> Übersicht
     </a>
-    <a href="/vorschau/woche" class="{{ 'active' if '/vorschau' in request.path else '' }}">
-      <span class="nav-icon">✦</span> Freigabe
-    </a>
-    <a href="/calendar/"      class="{{ 'active' if '/calendar' in request.path else '' }}">
-      <span class="nav-icon">◈</span> Kalender
+    <a href="/calendar/"      class="{{ 'active' if '/calendar' in request.path or '/vorschau' in request.path else '' }}">
+      <span class="nav-icon"><i data-lucide="calendar-days"></i></span> Kalender
     </a>
     <a href="/composer/"      class="{{ 'active' if '/composer' in request.path else '' }}">
-      <span class="nav-icon">✐</span> Composer
+      <span class="nav-icon"><i data-lucide="pen-line"></i></span> Composer
     </a>
 
     <div class="sidebar-section">Assets</div>
     <a href="/media/"         class="{{ 'active' if '/media' in request.path else '' }}">
-      <span class="nav-icon">⬚</span> Media
+      <span class="nav-icon"><i data-lucide="image"></i></span> Media
     </a>
     <a href="/einstellungen/marke" class="{{ 'active' if '/einstellungen/marke' in request.path else '' }}">
-      <span class="nav-icon">◉</span> Marke
+      <span class="nav-icon"><i data-lucide="sparkles"></i></span> Marke
     </a>
     <a href="/einstellungen/setup" class="{{ 'active' if '/einstellungen/setup' in request.path else '' }}">
-      <span class="nav-icon">⊙</span> Einrichtung
+      <span class="nav-icon"><i data-lucide="settings-2"></i></span> Einrichtung
     </a>
 
     <div class="sidebar-section">Daten</div>
     <a href="/analytics/"     class="{{ 'active' if '/analytics' in request.path else '' }}">
-      <span class="nav-icon">◎</span> Analytics
+      <span class="nav-icon"><i data-lucide="bar-chart-2"></i></span> Analytics
     </a>
     <a href="/verlauf/"       class="{{ 'active' if '/verlauf' in request.path else '' }}">
-      <span class="nav-icon">≡</span> Verlauf
+      <span class="nav-icon"><i data-lucide="clock"></i></span> Verlauf
     </a>
     <a href="/billing/"       class="{{ 'active' if '/billing' in request.path else '' }}" style="margin-top:4px">
-      <span class="nav-icon">💳</span> Billing
+      <span class="nav-icon"><i data-lucide="credit-card"></i></span> Billing
     </a>
   </nav>
 
@@ -504,17 +532,18 @@
 <!-- ── Notification Bell ───────────────────────────────────────────────────── -->
 <div id="notif-bell" onclick="toggleNotifDrawer()" title="Benachrichtigungen" style="
   position:fixed; bottom:24px; right:24px; z-index:300;
-  width:46px; height:46px; border-radius:50%;
-  background:var(--surface); border:1px solid var(--border);
+  width:44px; height:44px; border-radius:12px;
+  background:var(--surface); border:1px solid rgba(203,166,247,.12);
   display:flex; align-items:center; justify-content:center;
   cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,.4);
-  font-size:20px; transition:border-color .15s;
-" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
-  🔔
+  transition:border-color .15s, box-shadow .15s; color:var(--muted);
+" onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)';this.style.boxShadow='0 4px 20px rgba(203,166,247,.2)'"
+   onmouseleave="this.style.borderColor='rgba(203,166,247,.12)';this.style.color='var(--muted)';this.style.boxShadow='0 4px 16px rgba(0,0,0,.4)'">
+  <i data-lucide="bell" style="width:18px;height:18px;stroke-width:1.8"></i>
   <span id="notif-badge" style="
-    display:none; position:absolute; top:4px; right:4px;
-    background:#f38ba8; color:#1e1e2e; font-size:10px; font-weight:700;
-    width:16px; height:16px; border-radius:50%; text-align:center; line-height:16px;
+    display:none; position:absolute; top:6px; right:6px;
+    background:#f38ba8; color:#1e1e2e; font-size:9px; font-weight:700;
+    width:14px; height:14px; border-radius:50%; text-align:center; line-height:14px;
   "></span>
 </div>
 
@@ -696,6 +725,11 @@ document.addEventListener('keydown', e => {
     if (m.classList.contains('open')) { m.classList.remove('open'); }
   }
 });
+
+// ── Lucide icons ──────────────────────────────────────────────────────────────
+if (typeof lucide !== 'undefined') {
+  lucide.createIcons({ attrs: { width: '16', height: '16', 'stroke-width': '1.8' } });
+}
 </script>
 {% block extra_scripts %}{% endblock %}
 </body>
