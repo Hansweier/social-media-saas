@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% block title %}Übersicht{% endblock %}
+
+{% block extra_head %}
+<style>
+.stat-card {
+  background: var(--surface);
+  border: 1px solid rgba(203,166,247,.1);
+  border-radius: 12px;
+  padding: 18px 20px;
+  transition: border-color .15s, transform .15s;
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(203,166,247,.04) 0%, transparent 60%);
+  pointer-events: none;
+}
+.stat-card:hover { border-color: rgba(203,166,247,.22); transform: translateY(-1px); }
+.stat-num  { font-size:30px; font-weight:800; line-height:1; margin-bottom:4px; letter-spacing:-.02em; }
+.stat-lbl  { font-size:11.5px; color:var(--muted); font-weight:500; letter-spacing:.01em; }
+.platform-card { background:var(--surface); border:1px solid rgba(203,166,247,.1); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:8px; }
+.platform-name { font-weight:700; font-size:13px; text-transform:capitalize; }
+.log-line { font-family: 'Cascadia Code', 'Consolas', 'JetBrains Mono', monospace; font-size:11px; padding:2px 0; border-bottom:1px solid rgba(49,50,68,.8); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.next-post-card { background: linear-gradient(135deg, rgba(203,166,247,.1), rgba(250,179,135,.06)); border:1px solid rgba(203,166,247,.2); border-radius:12px; padding:18px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-title">Übersicht</div>
+<div class="page-sub">{{ now.strftime('%A, %d. %B %Y') }}</div>
+
+{% if not brand_configured %}
+<div style="background:linear-gradient(135deg,rgba(203,166,247,.1),rgba(180,190,254,.06));border:1px solid rgba(203,166,247,.3);border-radius:12px;padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">
+  <div>
+    <div style="font-weight:700;font-size:15px;margin-bottom:5px">🚀 Willkommen bei Sozibot!</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6">Richte zuerst die Marke ein — dauert 3 Minuten. Dann generiert der Bot sofort passende Posts.</div>
+  </div>
+  <a href="/fragebogen" class="btn btn-primary">Marke einrichten →</a>
+</div>
+{% endif %}
+
+<!-- Top Stats -->
+<div class="grid grid-5" style="margin-bottom:20px">
+  <div class="stat-card">
+    <div class="stat-num" style="color:var(--accent)">{{ cal_stats.today }}</div>
+    <div class="stat-lbl">Posts heute</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" style="color:var(--blue)">{{ cal_stats.week }}</div>
+    <div class="stat-lbl">Diese Woche</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" style="color:var(--peach)">{{ cal_stats.pending }}</div>
+    <div class="stat-lbl">Warten auf Freigabe</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" style="color:var(--teal)">{{ platform_status.values()|select|list|length }}</div>
+    <div class="stat-lbl">Aktive Plattformen</div>
+  </div>
+  <div class="stat-card">
+    {% if bot_status == 'läuft' %}
+      <div class="stat-num" style="color:var(--green)">●</div>
+      <div class="stat-lbl">Bot läuft</div>
+    {% elif bot_status == 'inaktiv' %}
+      <div class="stat-num" style="color:var(--yellow)">●</div>
+      <div class="stat-lbl">Bot inaktiv</div>
+    {% else %}
+      <div class="stat-num" style="color:#f87171">●</div>
+      <div class="stat-lbl">Bot gestoppt</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Next Post + Quick Actions -->
+<div class="grid grid-2" style="margin-bottom:20px">
+  {% if cal_stats.next_post %}
+  <div class="next-post-card">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px">Nächster Post</div>
+    <div style="font-size:20px;font-weight:700;margin-bottom:4px">{{ cal_stats.next_post.time }}</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="badge blue">{{ cal_stats.next_post.platform|upper }}</span>
+      <span style="font-size:13px;color:var(--muted)">{{ cal_stats.next_post.topic }}</span>
+    </div>
+  </div>
+  {% else %}
+  <div class="card" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:28px">
+    <div style="font-size:32px">📭</div>
+    <div style="font-weight:600">Keine Posts geplant</div>
+    <a href="/vorschau/woche" class="btn btn-primary btn-sm">→ Woche generieren</a>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-title">Schnellzugriff</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <a href="/vorschau/woche" class="btn btn-primary" style="text-decoration:none;justify-content:center">✅ Freigabe</a>
+      <a href="/composer/"      class="btn btn-secondary" style="text-decoration:none;justify-content:center">✏️ Composer</a>
+      <a href="/media/"         class="btn btn-secondary" style="text-decoration:none;justify-content:center">🖼️ Media</a>
+      <a href="/analytics/"     class="btn btn-secondary" style="text-decoration:none;justify-content:center">📈 Analytics</a>
+    </div>
+    {% if cal_stats.pending > 0 %}
+    <div style="margin-top:12px;padding:10px 12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);border-radius:8px;font-size:13px">
+      ⏳ <b>{{ cal_stats.pending }} Posts</b> warten auf deine Freigabe
+      <a href="/vorschau/woche" style="color:var(--yellow);margin-left:6px">→ Freigeben</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Platform Status -->
+<div class="card" style="margin-bottom:20px">
+  <div class="card-title">Plattform-Status</div>
+  {% set icons = {'instagram':'📸','facebook':'👍','linkedin':'💼','twitter':'🐦','tiktok':'🎵'} %}
+  {% set colors = {'instagram':'#e1306c','facebook':'#1877f2','linkedin':'#0a66c2','twitter':'#1da1f2','tiktok':'#ff0050'} %}
+  <div class="grid grid-5">
+    {% for platform, active in platform_status.items() %}
+    <div style="text-align:center;padding:12px 8px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">
+      <div style="font-size:26px;margin-bottom:6px">{{ icons[platform] }}</div>
+      <div style="font-size:12px;font-weight:700;color:{{ colors[platform] }};text-transform:capitalize;margin-bottom:6px">{{ platform }}</div>
+      {% if active %}
+        <span class="badge green" style="font-size:11px">● Aktiv</span>
+      {% else %}
+        <a href="/einstellungen/marke" style="text-decoration:none" title="Token einrichten">
+          <span class="badge grey" style="font-size:11px;cursor:pointer">+ Einrichten</span>
+        </a>
+      {% endif %}
+      <div style="margin-top:6px;font-size:11px;color:var(--muted)">
+        {{ summaries[platform].get('posts_veroeffentlicht', 0) }} Posts
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% if not platform_status.values()|select|list %}
+  <div style="margin-top:14px;padding:12px 16px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:13px;color:var(--yellow)">
+    ⚠️ Keine API-Tokens konfiguriert. Trag deine Tokens in <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">.env</code> ein und starte den Bot neu.
+    Der Bot kann Content generieren und anzeigen — aber noch nicht wirklich posten.
+    <div style="margin-top:8px"><a href="/einstellungen/marke" class="btn btn-sm btn-secondary" style="font-size:12px">→ Marke & Einstellungen</a></div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Escalation Alert -->
+{% if escalations %}
+<div style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3);border-radius:12px;padding:16px 20px;margin-bottom:20px">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+    <span style="font-size:20px">🚨</span>
+    <div>
+      <div style="font-weight:700;color:#f87171">{{ escalations|length }} Eskalation{{ 'en' if escalations|length > 1 else '' }} — persönliche Antwort nötig</div>
+      <div style="font-size:12px;color:var(--muted)">Diese Nachrichten wurden automatisch erkannt und müssen manuell bearbeitet werden.</div>
+    </div>
+  </div>
+  {% for e in escalations[-3:]|reverse %}
+  <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:6px;font-size:12px">
+    <div style="display:flex;gap:8px;margin-bottom:4px">
+      <span class="badge red" style="font-size:10px">{{ e.platform|upper }}</span>
+      <span style="color:var(--muted)">{{ e.timestamp[:16] }}</span>
+      <span style="color:var(--muted)">ID: {{ e.sender_id[:12] }}</span>
+    </div>
+    <div style="color:var(--text)">{{ e.message[:120] }}{% if e.message|length > 120 %}…{% endif %}</div>
+  </div>
+  {% endfor %}
+  {% if escalations|length > 3 %}<div style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px">… und {{ escalations|length - 3 }} weitere</div>{% endif %}
+</div>
+{% endif %}
+
+<!-- Live Log -->
+<div class="card">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div class="card-title" style="margin:0">Bot-Aktivität</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span id="log-refresh-indicator" style="font-size:11px;color:var(--muted)">Auto-refresh 30s</span>
+      <button class="btn btn-ghost btn-sm" onclick="refreshLog()">↻ Jetzt</button>
+    </div>
+  </div>
+  <div id="log-container" style="max-height:260px;overflow-y:auto;background:var(--surface2);border-radius:8px;padding:10px 12px">
+    {% if log_lines %}
+      {% for line in log_lines %}
+      <div class="log-line" style="color:{{'#f87171' if '[ERROR]' in line else '#f59e0b' if '[WARNING]' in line else '#22c55e' if 'Erfolgreich' in line else '#8892a4'}}">{{ line }}</div>
+      {% endfor %}
+    {% else %}
+    <div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">
+      Noch keine Aktivität. Starte den Bot mit <code>python start_bot.py</code>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function importSubmission(filename, company, btn) {
+  btnLoad(btn, 'Importiere...');
+  const r = await apiPost('/einstellungen/submission-importieren', { filename });
+  if (r.ok) {
+    toast(`✓ ${company} wurde als aktive Marke konfiguriert!`, 'success', 5000);
+    setTimeout(() => location.reload(), 1500);
+  } else {
+    btnReset(btn);
+    toast('Fehler: ' + (r.error || 'Unbekannt'), 'error');
+  }
+}
+
+// Auto-scroll to bottom on load
+const _lc = document.getElementById('log-container');
+if (_lc) _lc.scrollTop = _lc.scrollHeight;
+
+// Auto-refresh log every 30s
+let logTimer = setInterval(refreshLog, 30000);
+let countdown = 30;
+const indicator = document.getElementById('log-refresh-indicator');
+setInterval(() => {
+  countdown--;
+  if (countdown <= 0) countdown = 30;
+  indicator.textContent = `Auto-refresh in ${countdown}s`;
+}, 1000);
+
+async function refreshLog() {
+  try {
+    const r = await fetch('/api/log');
+    const j = await r.json();
+    const container = document.getElementById('log-container');
+    if (j.lines && j.lines.length > 0) {
+      container.innerHTML = j.lines.map(line => {
+        const color = line.includes('[ERROR]') ? '#f87171' : line.includes('[WARNING]') ? '#f59e0b' : line.includes('Erfolgreich') ? '#22c55e' : '#8892a4';
+        return `<div class="log-line" style="color:${color}">${line}</div>`;
+      }).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+    countdown = 30;
+  } catch(e) {}
+}
+</script>
+{% endblock %}

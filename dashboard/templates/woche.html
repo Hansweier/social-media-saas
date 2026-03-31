@@ -1,0 +1,962 @@
+{% extends "base.html" %}
+{% block title %}Wochenplanung{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Mode Toggle ── */
+.mode-toggle { display:flex; background:var(--surface2); border-radius:10px; padding:3px; border:1px solid var(--border); }
+.mode-btn { padding:7px 18px; border-radius:8px; border:none; cursor:pointer; font-size:13px; font-weight:600; background:transparent; color:var(--muted); transition:all .2s; }
+.mode-btn.active { background:var(--surface); color:var(--text); box-shadow:0 1px 4px rgba(0,0,0,.3); }
+.mode-btn.autopilot.active { color:#22c55e; }
+.mode-btn.copilot.active   { color:#60a5fa; }
+
+/* ── Stats Bar ── */
+.stats-bar { display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
+.stat { text-align:center; min-width:60px; }
+.stat .num { font-size:26px; font-weight:700; }
+.stat .lbl { font-size:12px; color:var(--muted); }
+@media(max-width:600px){ .stats-bar { gap:12px; } .stat .num { font-size:20px; } }
+
+/* ── Week Grid ── */
+.week-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; margin-bottom:24px; }
+@media(max-width:900px){ .week-grid{grid-template-columns:1fr;} }
+
+.day-col { background:var(--surface); border:1px solid var(--border); border-radius:10px; min-height:120px; overflow:hidden; }
+.day-col.today-col { border-color:rgba(227,0,11,.4); background:rgba(227,0,11,.03); }
+.day-header { padding:8px 10px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+.day-name { font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted); }
+.day-date { font-size:11px; color:var(--muted); }
+.day-header.today .day-name { color:var(--accent); }
+.day-header.today .day-date { color:var(--accent); }
+
+.slot-card { margin:6px; background:var(--surface2); border-radius:7px; padding:8px; cursor:pointer; transition:box-shadow .15s; border:1px solid transparent; }
+.slot-card:hover { box-shadow:0 0 0 1px var(--accent); }
+.slot-card.freigegeben { border-color:rgba(34,197,94,.3); background:rgba(34,197,94,.06); }
+.slot-card.abgelehnt   { border-color:rgba(248,113,113,.3); background:rgba(248,113,113,.06); opacity:.6; }
+.slot-card.generating  { opacity:.5; }
+
+.slot-platform { font-size:10px; font-weight:700; text-transform:uppercase; margin-bottom:3px; }
+.slot-topic    { font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.slot-score    { font-size:10px; margin-top:4px; }
+.slot-badge    { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:3px; }
+.b-green  { background:#22c55e; }
+.b-amber  { background:#f59e0b; }
+.b-grey   { background:#64748b; }
+.b-red    { background:#f87171; }
+
+/* ── Slot Detail Panel ── */
+#detail-panel {
+  display:none; position:fixed; right:0; top:0; bottom:0; width:420px;
+  background:var(--surface); border-left:1px solid var(--border); z-index:50;
+  overflow-y:auto; box-shadow:-4px 0 20px rgba(0,0,0,.4);
+}
+#detail-panel.open { display:flex; flex-direction:column; }
+@media(max-width:600px){
+  #detail-panel { width:100%; left:0; top:auto; height:75vh; border-left:none; border-top:1px solid var(--border); box-shadow:0 -4px 20px rgba(0,0,0,.4); }
+}
+.panel-header { padding:16px 18px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+.panel-body { padding:16px 18px; flex:1; }
+.panel-footer { padding:14px 18px; border-top:1px solid var(--border); display:flex; gap:8px; }
+
+/* ── Variant Cards ── */
+.variant-card { border:2px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; cursor:pointer; transition:all .15s; }
+.variant-card:hover { border-color:#60a5fa; }
+.variant-card.selected-v { border-color:#22c55e; background:rgba(34,197,94,.06); }
+.variant-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:6px; }
+.variant-label { font-size:11px; font-weight:700; text-transform:uppercase; flex:1; }
+.variant-score { font-size:11px; color:var(--muted); white-space:nowrap; }
+.variant-actions { display:flex; gap:4px; }
+.v-icon-btn { background:none; border:1px solid var(--border); border-radius:6px; color:var(--muted); cursor:pointer; padding:3px 7px; font-size:12px; transition:all .15s; }
+.v-icon-btn:hover { color:var(--text); border-color:var(--blue); }
+.variant-content { font-size:13px; line-height:1.55; color:var(--muted); max-height:120px; overflow:hidden; position:relative; }
+.variant-content.exp { max-height:none; }
+.variant-content::after { content:''; position:absolute; bottom:0; left:0; right:0; height:30px; background:linear-gradient(transparent,var(--surface)); }
+.variant-content.exp::after { display:none; }
+.v-expand { font-size:11px; color:var(--blue); cursor:pointer; margin-top:4px; display:block; }
+/* ── Inline Edit ── */
+.variant-edit-wrap { display:none; margin-top:8px; }
+.variant-edit-wrap textarea { width:100%; min-height:120px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; padding:10px; resize:vertical; font-family:inherit; line-height:1.55; }
+.variant-edit-wrap textarea:focus { outline:none; border-color:var(--blue); }
+.edit-actions { display:flex; gap:6px; margin-top:6px; }
+/* ── Kbd hint ── */
+.kbd-hint { font-size:11px; color:var(--border); text-align:center; padding:6px 0; }
+
+/* ── Regen Sheet ── */
+#regen-sheet { display:none; padding:14px 18px; border-top:1px solid var(--border); background:var(--surface2); }
+#regen-sheet.open { display:block; }
+.regen-btn { display:block; width:100%; padding:11px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:13px; cursor:pointer; margin-bottom:8px; text-align:left; transition:border-color .15s; }
+.regen-btn:hover { border-color:var(--accent); }
+
+/* ── Improve Sheet ── */
+#improve-sheet { display:none; padding:14px 18px; border-top:1px solid var(--border); background:var(--surface2); }
+#improve-sheet.open { display:block; }
+.improve-presets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.improve-preset { padding:5px 11px; border-radius:16px; border:1px solid var(--border); background:var(--surface); color:var(--muted); font-size:11px; cursor:pointer; transition:all .15s; white-space:nowrap; }
+.improve-preset:hover, .improve-preset.active { border-color:#a78bfa; color:#a78bfa; background:rgba(167,139,250,.1); }
+#improve-custom { width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:12px; padding:8px 10px; margin-bottom:8px; font-family:inherit; resize:none; height:52px; }
+#improve-custom:focus { outline:none; border-color:#a78bfa; }
+
+/* ── Char counter ── */
+.char-counter { font-size:10px; color:var(--subdued); margin-top:4px; display:block; }
+.char-counter.over { color:#f87171; font-weight:600; }
+
+/* ── Autopilot Info ── */
+.autopilot-banner { background:rgba(34,197,94,.08); border:1px solid rgba(34,197,94,.2); border-radius:10px; padding:14px 18px; margin-bottom:20px; display:flex; align-items:center; gap:12px; }
+
+/* ── Reaction Buttons ── */
+.reaction-row { display:flex; gap:6px; margin-top:8px; padding-top:7px; border-top:1px solid var(--border); }
+.reaction-btn { background:none; border:1px solid var(--border); border-radius:16px; padding:3px 10px; font-size:12px; cursor:pointer; color:var(--muted); transition:all .15s; }
+.reaction-btn:hover { border-color:#60a5fa; background:rgba(96,165,250,.08); color:var(--text); }
+.reaction-btn.active { border-color:#22c55e; background:rgba(34,197,94,.12); color:#22c55e; font-weight:600; }
+
+/* ── Approval Note ── */
+#approval-note { width:100%; min-height:56px; background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:12px; padding:8px 10px; resize:none; font-family:inherit; box-sizing:border-box; }
+#approval-note:focus { outline:none; border-color:#22c55e; }
+
+/* ── Rejection Modal ── */
+#reject-modal { display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.6); align-items:center; justify-content:center; }
+.reject-modal-box { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:24px; width:min(420px,92vw); box-shadow:0 8px 40px rgba(0,0,0,.5); }
+.reject-modal-title { font-size:16px; font-weight:700; margin-bottom:6px; }
+.reject-modal-sub { font-size:13px; color:var(--muted); margin-bottom:18px; }
+.reject-cats { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+.reject-cat-btn { padding:6px 13px; border-radius:20px; border:1px solid var(--border); background:var(--surface2); color:var(--muted); font-size:12px; cursor:pointer; transition:all .15s; }
+.reject-cat-btn:hover { border-color:#f87171; color:#f87171; }
+.reject-cat-btn.active { border-color:#f87171; background:rgba(248,113,113,.12); color:#f87171; font-weight:600; }
+.reject-reason-label { font-size:12px; color:var(--muted); margin-bottom:6px; }
+#reject-reason-text { width:100%; min-height:72px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; padding:10px; resize:vertical; font-family:inherit; line-height:1.5; box-sizing:border-box; }
+#reject-reason-text:focus { outline:none; border-color:#f87171; }
+.reject-modal-footer { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Header Row -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+  <div>
+    <div class="page-title" style="margin:0">Content-Wochenplanung</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:3px">{{ week_label }}</div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:12px">
+    <!-- Week Navigation -->
+    <a href="/vorschau/woche?w={{ offset - 1 }}" class="btn btn-secondary btn-sm">‹ Vorherige</a>
+    <a href="/vorschau/woche?w=0"                 class="btn btn-secondary btn-sm">Heute</a>
+    <a href="/vorschau/woche?w={{ offset + 1 }}" class="btn btn-secondary btn-sm">Nächste ›</a>
+
+    <!-- Mode Toggle -->
+    <div class="mode-toggle" id="modeToggle">
+      <button class="mode-btn autopilot {% if mode=='autopilot' %}active{% endif %}"
+        onclick="setMode('autopilot')"
+        title="Bot postet automatisch ohne Freigabe. Du kannst einzelne Posts jederzeit ablehnen (60 Min. Veto-Fenster).">🚀 Auto-Pilot</button>
+      <button class="mode-btn copilot {% if mode=='copilot' %}active{% endif %}"
+        onclick="setMode('copilot')"
+        title="Bot schlägt 3 Varianten vor. Du wählst eine aus oder lehnst ab — nichts postet ohne deine Freigabe.">✏️ Co-Pilot</button>
+    </div>
+  </div>
+</div>
+
+<!-- Past Week Warning -->
+{% if offset < 0 %}
+<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
+  <span style="font-size:18px">⚠️</span>
+  <div style="font-size:13px;color:#f59e0b">Du betrachtest eine <b>vergangene Woche</b> ({{ week_label }}). Posts können nicht mehr geändert werden.</div>
+</div>
+{% endif %}
+
+<!-- Auto-Pilot Info Banner -->
+{% if mode == 'autopilot' %}
+<div class="autopilot-banner">
+  <span style="font-size:24px">🚀</span>
+  <div>
+    <div style="font-weight:700">Auto-Pilot aktiv</div>
+    <div style="font-size:13px;color:var(--muted)">Der Bot postet automatisch ohne Freigabe. Du kannst einzelne Posts jederzeit ablehnen.</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Stats + Bulk Approve -->
+{% if mode == 'copilot' %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+  <div class="stats-bar">
+    <div class="stat"><div class="num" style="color:var(--text)">{{ total }}</div><div class="lbl">Posts gesamt</div></div>
+    <div style="width:1px;height:32px;background:var(--border)"></div>
+    <div class="stat"><div class="num" style="color:#22c55e">{{ freigegeben }}</div><div class="lbl">Freigegeben</div></div>
+    <div style="width:1px;height:32px;background:var(--border)"></div>
+    <div class="stat"><div class="num" style="color:#f59e0b">{{ pending }}</div><div class="lbl">Ausstehend</div></div>
+  </div>
+
+  {% if confident_ids %}
+  <button class="btn btn-primary" onclick="approveAllConfident()"
+    style="padding:10px 20px"
+    title="Posts mit KI-Score ≥ 80% werden automatisch mit der besten Variante freigegeben">
+    ✓ {{ confident_ids|length }} Posts automatisch freigeben (KI ≥ 80%)
+  </button>
+  {% else %}
+  <span class="badge green">✓ Alle bearbeitet</span>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Empty State: keine Posts -->
+{% set total_posts = by_day.values() | map('length') | sum %}
+{% if total_posts == 0 %}
+<div class="card" style="margin-bottom:20px">
+  <div class="empty-state">
+    <div class="icon">📭</div>
+    <h3>Noch keine Posts für diese Woche</h3>
+    <p>Klick auf "Woche generieren" — der Bot plant automatisch Posts für alle Plattformen und erstellt 3 Varianten pro Slot.</p>
+    <button class="btn btn-primary btn-lg" id="gen-week-btn" onclick="generateWeek()">
+      🤖 Woche generieren
+    </button>
+    <div id="gen-progress" style="display:none;margin-top:20px;max-width:340px;margin-left:auto;margin-right:auto">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:8px" id="gen-status-text">Generiere Posts...</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Du kannst die Seite geöffnet lassen oder kurz weggehen — der Bot arbeitet im Hintergrund.</div>
+      <div class="progress-wrap"><div class="progress-fill" id="gen-bar" style="width:0%"></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+        <span style="font-size:12px;color:var(--muted)" id="gen-count">0 / 0</span>
+        <button class="btn btn-ghost btn-sm" onclick="cancelGeneration()" id="gen-cancel-btn" style="font-size:11px">✕ Abbrechen</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Week Grid -->
+<div class="week-grid" id="weekGrid" {% if total_posts == 0 %}style="opacity:.3;pointer-events:none"{% endif %}>
+  {% for day in week_days %}
+  {% set day_str = day.isoformat() %}
+  {% set is_today = day_str == now.date().isoformat() %}
+  {% set day_posts = by_day.get(day_str, []) %}
+  <div class="day-col {% if is_today %}today-col{% endif %}">
+    <div class="day-header {% if is_today %}today{% endif %}">
+      <span class="day-name">{{ day_names[loop.index0] }}</span>
+      <span class="day-date">{{ day.strftime('%d.%m') }}</span>
+    </div>
+
+    {% for post in day_posts %}
+    {% set ast = post.get('approval_status','pending') %}
+    {% set best_score = (post.get('variants') or [{}]) | map(attribute='ai_score') | max | default(0) %}
+    <div class="slot-card {{ ast }}" id="slot-{{ post.id }}"
+      onclick="openSlot('{{ post.id }}')">
+      <div class="slot-platform" style="color:{{'#e1306c' if post.platform=='instagram' else '#1877f2' if post.platform=='facebook' else '#0a66c2' if post.platform=='linkedin' else '#ff0050' if post.platform=='tiktok' else '#1da1f2'}}">
+        {{ post.platform }}
+      </div>
+      <div class="slot-topic">{{ post.get('topic','—')[:45] }}</div>
+      {% set t = post.get('scheduled_time','') %}
+      {% if t|length >= 16 %}<div style="font-size:10px;color:var(--border);margin-top:2px">🕐 {{ t[11:16] }}</div>{% endif %}
+      <div class="slot-score">
+        {% if ast == 'freigegeben' %}
+          <span class="slot-badge b-green"></span><span style="font-size:10px;color:#22c55e">Freigegeben</span>
+        {% elif ast == 'abgelehnt' %}
+          <span class="slot-badge b-red"></span><span style="font-size:10px;color:#f87171">Abgelehnt</span>
+        {% elif post.get('variants') %}
+          {% if best_score >= 0.8 %}
+            <span class="slot-badge b-green"></span><span style="font-size:10px;color:#22c55e">KI: {{ (best_score*100)|int }}%</span>
+          {% else %}
+            <span class="slot-badge b-amber"></span><span style="font-size:10px;color:#f59e0b">KI: {{ (best_score*100)|int }}%</span>
+          {% endif %}
+        {% else %}
+          <span class="slot-badge b-grey"></span><span style="font-size:10px;color:var(--muted)">Noch nicht generiert</span>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div style="padding:12px;color:var(--border);font-size:12px;text-align:center">Frei</div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Media Queue -->
+{% if media_queue %}
+<div class="card">
+  <div class="card-title">🖼️ Bilder bereit zum Posten</div>
+  <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px">
+    {% for m in media_queue %}
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;width:200px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">{{ m.media_id[:20] }}</div>
+      <div style="font-size:12px;margin-bottom:6px">Plattform: <b>{{ m.platform|upper }}</b></div>
+      {% if m.queue_status == 'approved' %}
+        <span class="badge green">✓ Freigegeben</span>
+      {% else %}
+        <button class="btn btn-primary btn-sm" style="width:100%" onclick="approveMedia('{{ m.media_id }}',this)">Freigeben</button>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Slot Detail Panel -->
+<div id="detail-panel">
+  <div class="panel-header">
+    <div id="panel-title" style="font-weight:700;font-size:15px">Post-Details</div>
+    <button onclick="closePanel()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+  </div>
+  <div class="panel-body" id="panel-body">
+    <div style="color:var(--muted);text-align:center;padding:30px">Lade...</div>
+  </div>
+  <div id="regen-sheet">
+    <div style="font-size:13px;font-weight:600;margin-bottom:6px">Neu generieren:</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Aktuelles Thema: <span id="regen-topic-label" style="color:var(--text)">—</span></div>
+    <button class="regen-btn" onclick="regenerate('angle')">
+      🔄 Anderer Blickwinkel, gleiches Thema
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">z.B. als Geschichte, Frage, oder Überraschungsaussage</div>
+    </button>
+    <button class="regen-btn" onclick="regenerate('topic')">
+      🎲 Komplett neues Thema
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Anderes Thema aus der Topic-Rotation</div>
+    </button>
+    <button class="btn btn-secondary btn-sm" onclick="document.getElementById('regen-sheet').classList.remove('open')" style="width:100%;margin-top:4px">Abbrechen</button>
+  </div>
+  <div id="improve-sheet">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">✨ Variante verbessern</div>
+    <div class="improve-presets">
+      <button class="improve-preset" onclick="selectPreset(this,'Mache den Post kürzer und prägnanter')">Kürzer</button>
+      <button class="improve-preset" onclick="selectPreset(this,'Erweitere den Post mit mehr Tiefe und Mehrwert')">Länger</button>
+      <button class="improve-preset" onclick="selectPreset(this,'Schreibe persönlicher und authentischer, weniger werblich')">Persönlicher</button>
+      <button class="improve-preset" onclick="selectPreset(this,'Schreibe professioneller und seriöser')">Professioneller</button>
+      <button class="improve-preset" onclick="selectPreset(this,'Füge passende Emojis ein für mehr Aufmerksamkeit')">+ Emojis</button>
+      <button class="improve-preset" onclick="selectPreset(this,'Füge relevante Hashtags am Ende hinzu')">+ Hashtags</button>
+      <button class="improve-preset" onclick="selectPreset(this,'Schreibe einen stärkeren, überzeugenderen Call-to-Action')">Stärkerer CTA</button>
+      <button class="improve-preset" onclick="selectPreset(this,'Mache den ersten Satz einprägsamer und klickstärker')">Besserer Hook</button>
+    </div>
+    <textarea id="improve-custom" placeholder="Eigene Anweisung: z.B. 'Füge eine rhetorische Frage ein' ..."></textarea>
+    <div class="edit-actions">
+      <button class="btn btn-primary btn-sm" style="background:#a78bfa;color:#1e1e2e" onclick="submitImprove()">✨ Verbessern</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeImproveSheet()">Abbrechen</button>
+    </div>
+  </div>
+  <!-- Optional Approval Note -->
+  <div id="approval-note-wrap" style="display:none;padding:10px 18px;border-top:1px solid var(--border);background:var(--surface2)">
+    <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:6px">Begründung (hilft dem Bot zu lernen)</div>
+    <textarea id="approval-note" placeholder="Was gefällt dir besonders gut? z.B. 'Tolle Ansprache, perfekte Länge'..."></textarea>
+  </div>
+  <div class="panel-footer">
+    <button class="btn btn-primary" id="btn-approve" onclick="approveSelected()" style="flex:1">✓ Freigeben</button>
+    <button class="btn btn-secondary" title="Begründung hinzufügen" onclick="toggleApprovalNote()" style="flex:0 0 auto" id="btn-note">💬</button>
+    <button class="btn btn-secondary" title="Neu generieren" onclick="toggleRegenSheet()" style="flex:0 0 auto">↺</button>
+    <button class="btn btn-secondary" title="Verbessern" onclick="toggleImproveSheet()" style="flex:0 0 auto;color:#a78bfa">✨</button>
+    <button class="btn btn-secondary" id="btn-reject" onclick="rejectSlot()" style="color:#f87171">✗</button>
+  </div>
+</div>
+
+<!-- Overlay -->
+<div id="overlay" onclick="closePanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40"></div>
+
+<!-- Rejection Reason Modal -->
+<div id="reject-modal" onclick="if(event.target===this)closeRejectModal()">
+  <div class="reject-modal-box">
+    <input type="hidden" id="reject-modal-pid">
+    <div class="reject-modal-title">Post ablehnen</div>
+    <div class="reject-modal-sub">Warum möchtest du diesen Post ablehnen? (optional)</div>
+    <div class="reject-cats">
+      <button class="reject-cat-btn" data-cat="inhalt" onclick="selectRejectCat(this)">Inhalt passt nicht</button>
+      <button class="reject-cat-btn" data-cat="ton" onclick="selectRejectCat(this)">Falscher Ton</button>
+      <button class="reject-cat-btn" data-cat="laenge" onclick="selectRejectCat(this)">Zu lang / zu kurz</button>
+      <button class="reject-cat-btn" data-cat="qualitaet" onclick="selectRejectCat(this)">Zu generisch</button>
+      <button class="reject-cat-btn" data-cat="thema" onclick="selectRejectCat(this)">Falsches Thema</button>
+      <button class="reject-cat-btn active" data-cat="sonstige" onclick="selectRejectCat(this)">Sonstiges</button>
+    </div>
+    <div class="reject-reason-label">Kurze Erklärung (optional — hilft dem Bot zu lernen)</div>
+    <textarea id="reject-reason-text" placeholder="z.B. Zu werblich, bitte authentischer..."></textarea>
+    <div class="reject-modal-footer">
+      <button class="btn btn-secondary" onclick="closeRejectModal()">Abbrechen</button>
+      <button class="btn" style="background:#f87171;color:#1e1e2e" onclick="submitReject()">✗ Ablehnen</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let currentPostId = null;
+let allData = {{ by_day | tojson }};
+
+const CONFIDENT_IDS = {{ confident_ids | tojson }};
+
+// ── Mode Toggle ─────────────────────────────────────────────────────────────
+async function setMode(mode) {
+  await apiPost('/vorschau/modus', { mode });
+  location.reload();
+}
+
+// ── Bulk Approve ─────────────────────────────────────────────────────────────
+async function approveAllConfident() {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '⏳ Freigabe läuft...';
+  const r = await apiPost('/vorschau/freigeben-alle', { ids: CONFIDENT_IDS });
+  if (r.ok) { location.reload(); }
+  else { btn.textContent = '✗ Fehler'; btn.disabled = false; }
+}
+
+// ── Slot Detail Panel ────────────────────────────────────────────────────────
+function openSlot(postId) {
+  currentPostId = postId;
+  document.getElementById('detail-panel').classList.add('open');
+  document.getElementById('overlay').style.display = 'block';
+  document.getElementById('regen-sheet').classList.remove('open');
+  // Show current topic in regen sheet
+  const post = getPost(postId);
+  const topicEl = document.getElementById('regen-topic-label');
+  if (topicEl && post) topicEl.textContent = post.topic || '—';
+  renderPanel(postId);
+}
+
+function closePanel() {
+  document.getElementById('detail-panel').classList.remove('open');
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('approval-note-wrap').style.display = 'none';
+  const noteBtn = document.getElementById('btn-note');
+  if (noteBtn) noteBtn.style.color = '';
+  currentPostId = null;
+}
+
+function getPost(postId) {
+  for (const posts of Object.values(allData)) {
+    const p = posts.find(x => x.id === postId);
+    if (p) return p;
+  }
+  return null;
+}
+
+function renderPanel(postId) {
+  const post = getPost(postId);
+  if (!post) return;
+
+  document.getElementById('panel-title').textContent =
+    post.platform.toUpperCase() + ' · ' + (post.scheduled_time || '').slice(0,16).replace('T',' ');
+
+  // Sort by AI score descending — best variant first
+  const variants = [...(post.variants || [])].sort((a, b) => (b.ai_score||0) - (a.ai_score||0));
+  // Auto-select the best variant if nothing is currently selected
+  if (variants.length > 0 && !variants.some(v => v.selected)) {
+    variants[0].selected = true;
+    if (post.variants) post.variants.forEach(v => v.selected = v.variant_id === variants[0].variant_id);
+  }
+  let html = '';
+
+  if (variants.length === 0) {
+    html = `<div style="text-align:center;padding:20px;color:var(--muted)">
+      Noch keine Varianten generiert.<br><br>
+      <button class="btn btn-primary" onclick="generateVariants('${postId}')">🤖 Varianten generieren</button>
+    </div>`;
+  } else {
+    const CHAR_LIMITS = {instagram:2200, facebook:500, linkedin:1300, twitter:280, tiktok:150};
+    const charLimit = CHAR_LIMITS[post.platform] || 2200;
+    variants.forEach((v, i) => {
+      const sel = v.selected ? 'selected-v' : '';
+      const score = Math.round((v.ai_score||0) * 100);
+      const scoreColor = score >= 80 ? '#22c55e' : score >= 60 ? '#f59e0b' : '#f87171';
+      const rankLabel = i === 0 ? '★ Empfohlen' : i === 1 ? 'B' : 'C';
+      const editedBadge = v.edited ? '<span style="font-size:10px;color:#f59e0b;margin-left:4px">✏</span>' : '';
+      const charLen = (v.content || '').length;
+      const charOver = charLen > charLimit;
+      const charClass = charOver ? 'char-counter over' : 'char-counter';
+      html += `
+      <div class="variant-card ${sel}" id="vc-${v.variant_id}" onclick="pickVariant('${v.variant_id}')">
+        <div class="variant-header">
+          <span class="variant-label" style="color:${sel ? '#22c55e' : i===0 ? 'var(--text)' : 'var(--muted)'}">
+            ${rankLabel}${sel ? ' ✓' : ''}${editedBadge}
+          </span>
+          <span class="variant-score" style="color:${scoreColor};font-weight:600">KI: ${score}%</span>
+          <div class="variant-actions" onclick="event.stopPropagation()">
+            <button class="v-icon-btn" title="Kopieren" onclick="copyVariant('${v.variant_id}',this)">⧉</button>
+            <button class="v-icon-btn" title="Verbessern" onclick="openImproveForVariant('${v.variant_id}')" style="color:#a78bfa">✨</button>
+            <button class="v-icon-btn" id="vc-edit-btn-${v.variant_id}" title="Bearbeiten" onclick="toggleEditVariant('${v.variant_id}')">✏</button>
+          </div>
+        </div>
+        <div class="variant-content" id="vc-body-${v.variant_id}">${escHtml(v.content)}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
+          <span class="v-expand" onclick="event.stopPropagation();toggleVExp('${v.variant_id}')">Mehr lesen ↓</span>
+          <span class="${charClass}" id="vc-chars-${v.variant_id}">${charLen}/${charLimit}</span>
+        </div>
+        <div class="variant-edit-wrap" id="vc-edit-${v.variant_id}">
+          <textarea id="vc-ta-${v.variant_id}" onclick="event.stopPropagation()" oninput="updateCharCount('${v.variant_id}',${charLimit},this.value)">${escHtml(v.content)}</textarea>
+          <div class="edit-actions">
+            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();saveVariantEdit('${v.variant_id}')">💾 Speichern</button>
+            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();toggleEditVariant('${v.variant_id}')">Abbrechen</button>
+          </div>
+        </div>
+        <div id="vc-improving-${v.variant_id}" style="display:none;padding:8px 0;text-align:center;color:#a78bfa;font-size:12px">
+          <span style="display:inline-block;width:12px;height:12px;border:2px solid rgba(167,139,250,.3);border-top-color:#a78bfa;border-radius:50%;animation:spin 0.7s linear infinite;margin-right:6px;vertical-align:middle"></span>
+          KI verbessert...
+        </div>
+        <div class="reaction-row" onclick="event.stopPropagation()" title="Wie gut ist diese Variante?">
+          <button class="reaction-btn" id="rb-${v.variant_id}-love" onclick="rateVariant('${v.variant_id}','love')">❤️ Perfekt</button>
+          <button class="reaction-btn" id="rb-${v.variant_id}-good" onclick="rateVariant('${v.variant_id}','good')">👍 Gut</button>
+          <button class="reaction-btn" id="rb-${v.variant_id}-meh"  onclick="rateVariant('${v.variant_id}','meh')">✏️ Fast gut</button>
+        </div>
+      </div>`;
+    });
+    html += `<div class="kbd-hint">← → Variante wechseln &nbsp;·&nbsp; Enter freigeben &nbsp;·&nbsp; R ablehnen</div>`;
+  }
+
+  // Topic Info
+  html = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+    📌 ${post.topic || ''}  ·  ${(post.scheduled_time||'').slice(11,16)} Uhr
+  </div>` + html;
+
+  if (post.approval_status === 'freigegeben') {
+    html += `<div style="margin-top:12px" class="badge green">✓ Bereits freigegeben</div>`;
+  }
+
+  document.getElementById('panel-body').innerHTML = html;
+}
+
+function toggleVExp(vid) {
+  const el = document.getElementById('vc-body-' + vid);
+  el.classList.toggle('exp');
+}
+
+function pickVariant(variantId) {
+  document.querySelectorAll('.variant-card').forEach(c => {
+    c.classList.remove('selected-v');
+    const lbl = c.querySelector('.variant-label');
+    if (lbl) lbl.style.color = 'var(--muted)';
+  });
+  const card = document.getElementById('vc-' + variantId);
+  card?.classList.add('selected-v');
+  if (card) {
+    const lbl = card.querySelector('.variant-label');
+    if (lbl) lbl.style.color = '#22c55e';
+    // Scroll into view if needed
+    card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  // Mark in allData
+  const post = getPost(currentPostId);
+  if (post?.variants) {
+    post.variants.forEach(v => v.selected = v.variant_id === variantId);
+  }
+}
+
+async function generateVariants(postId) {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '⏳ Generiere 3 Varianten...';
+  document.getElementById('panel-body').innerHTML =
+    `<div style="text-align:center;padding:30px;color:var(--muted)">
+      <div class="spinner" style="width:22px;height:22px;border-color:rgba(255,255,255,.2);border-top-color:#60a5fa;margin:0 auto 12px"></div>
+      Generiere 3 Varianten mit Claude KI...
+    </div>`;
+  const r = await apiPost('/vorschau/varianten/' + postId);
+  if (r.ok) {
+    let tries = 0;
+    const post = getPost(postId);
+    const poll = setInterval(async () => {
+      tries++;
+      const s = await fetch('/vorschau/varianten-status/' + postId).then(r=>r.json()).catch(()=>({}));
+      if (s.ready) {
+        clearInterval(poll);
+        if (post) { post.variants = s.variants; post.approval_status = s.approval_status; }
+        renderPanel(postId);
+        toast('3 Varianten generiert!', 'success', 2500);
+      } else if (tries > 40) {
+        clearInterval(poll);
+        document.getElementById('panel-body').innerHTML =
+          '<div style="text-align:center;padding:30px;color:#f87171">✗ Zeitüberschreitung — Claude API antwortet nicht. Bitte erneut versuchen.</div>';
+        btn.disabled = false; btn.textContent = '🤖 Varianten generieren';
+      }
+    }, 2000);
+  } else {
+    btn.disabled = false; btn.textContent = '🤖 Varianten generieren';
+    toast('Fehler: ' + (r.error||'unbekannt'), 'error');
+  }
+}
+
+function toggleApprovalNote() {
+  const wrap = document.getElementById('approval-note-wrap');
+  const isOpen = wrap.style.display !== 'none';
+  wrap.style.display = isOpen ? 'none' : 'block';
+  const btn = document.getElementById('btn-note');
+  if (btn) btn.style.color = isOpen ? '' : '#22c55e';
+  if (!isOpen) setTimeout(() => document.getElementById('approval-note')?.focus(), 50);
+}
+
+async function rateVariant(vid, rating) {
+  // Visual feedback — toggle active on clicked button
+  ['love','good','meh'].forEach(r => {
+    const btn = document.getElementById(`rb-${vid}-${r}`);
+    if (btn) btn.classList.toggle('active', r === rating);
+  });
+  await apiPost('/vorschau/variant/bewerten', {
+    post_id: currentPostId, variant_id: vid, rating
+  });
+}
+
+async function approveSelected() {
+  const post = getPost(currentPostId);
+  const selected = post?.variants?.find(v => v.selected);
+  const note = document.getElementById('approval-note')?.value?.trim() || '';
+  let r;
+  if (selected) {
+    r = await apiPost('/vorschau/variant/waehlen', {
+      post_id: currentPostId, variant_id: selected.variant_id, approval_note: note
+    });
+  } else {
+    r = await apiPost('/vorschau/freigeben/' + currentPostId, { approval_note: note });
+  }
+  if (r.ok) {
+    // Update local state
+    if (post) post.approval_status = 'freigegeben';
+    // Update slot card
+    const card = document.getElementById('slot-' + currentPostId);
+    if (card) {
+      card.className = 'slot-card freigegeben';
+      card.querySelector('.slot-score').innerHTML = '<span class="slot-badge b-green"></span><span style="font-size:10px;color:#22c55e">Freigegeben</span>';
+    }
+    closePanel();
+    // Reset note
+    const noteEl = document.getElementById('approval-note');
+    if (noteEl) noteEl.value = '';
+    document.getElementById('approval-note-wrap').style.display = 'none';
+    const noteBtn = document.getElementById('btn-note');
+    if (noteBtn) noteBtn.style.color = '';
+  }
+}
+
+function rejectSlot() {
+  // Open rejection reason modal instead of posting directly
+  openRejectModal(currentPostId);
+}
+
+// ── Rejection Modal ───────────────────────────────────────────────────────────
+function selectRejectCat(btn) {
+  document.querySelectorAll('.reject-cat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function openRejectModal(pid) {
+  document.getElementById('reject-modal-pid').value = pid;
+  document.getElementById('reject-reason-text').value = '';
+  // Reset category selection
+  document.querySelectorAll('.reject-cat-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.reject-cat-btn[data-cat="sonstige"]').classList.add('active');
+  document.getElementById('reject-modal').style.display = 'flex';
+}
+
+function closeRejectModal() {
+  document.getElementById('reject-modal').style.display = 'none';
+}
+
+async function submitReject() {
+  const pid             = document.getElementById('reject-modal-pid').value;
+  const activeBtn       = document.querySelector('.reject-cat-btn.active');
+  const reason_category = activeBtn ? activeBtn.dataset.cat : 'sonstige';
+  const reason_text     = document.getElementById('reject-reason-text').value.trim();
+
+  const r = await apiPost('/vorschau/ablehnen/' + pid, { reason_category, reason_text });
+  if (r.ok) {
+    closeRejectModal();
+    const post = getPost(pid);
+    if (post) post.approval_status = 'abgelehnt';
+    const card = document.getElementById('slot-' + pid);
+    if (card) card.className = 'slot-card abgelehnt';
+    closePanel();
+    // Undo toast (6 seconds)
+    toast('Post abgelehnt', 'info', 6000, '↩ Rückgängig', async (toastEl) => {
+      clearTimeout(toastEl._timer);
+      toastEl.style.animation = 'fadeOut .2s ease forwards';
+      setTimeout(() => toastEl.remove(), 200);
+      const r2 = await apiPost('/vorschau/ablehnen-rueckgaengig/' + pid);
+      if (r2.ok) {
+        const p = getPost(pid);
+        if (p) p.approval_status = 'pending';
+        const c = document.getElementById('slot-' + pid);
+        if (c) {
+          c.className = 'slot-card pending';
+          const scoreEl = c.querySelector('.slot-score');
+          if (scoreEl) scoreEl.innerHTML = '<span class="slot-badge b-amber"></span><span style="font-size:10px;color:#f59e0b">Ausstehend</span>';
+        }
+        toast('Ablehnung rückgängig gemacht', 'success');
+      }
+    });
+  }
+}
+
+// ── Inline Variant Editing ────────────────────────────────────────────────────
+function toggleEditVariant(vid) {
+  const wrap = document.getElementById('vc-edit-' + vid);
+  const body = document.getElementById('vc-body-' + vid);
+  const expBtn = body?.nextElementSibling; // .v-expand
+  const isOpen = wrap?.style.display !== 'none' && wrap?.style.display !== '';
+  if (isOpen) {
+    wrap.style.display = 'none';
+    body.style.display = '';
+    if (expBtn) expBtn.style.display = '';
+  } else {
+    wrap.style.display = 'block';
+    body.style.display = 'none';
+    if (expBtn) expBtn.style.display = 'none';
+    const ta = document.getElementById('vc-ta-' + vid);
+    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  }
+}
+
+async function saveVariantEdit(vid) {
+  const ta = document.getElementById('vc-ta-' + vid);
+  const newContent = ta?.value?.trim();
+  if (!newContent) return;
+  const r = await apiPost('/vorschau/variant/bearbeiten', {
+    post_id: currentPostId, variant_id: vid, content: newContent
+  });
+  if (r.ok) {
+    const body = document.getElementById('vc-body-' + vid);
+    if (body) body.textContent = newContent;
+    const post = getPost(currentPostId);
+    const v = post?.variants?.find(x => x.variant_id === vid);
+    if (v) { v.content = newContent; v.edited = true; }
+    toggleEditVariant(vid);
+    toast('Variante gespeichert!', 'success', 2000);
+  }
+}
+
+// ── HTML escape helper ────────────────────────────────────────────────────────
+function escHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Regen/Improve Sheet toggles ──────────────────────────────────────────────
+function toggleRegenSheet() {
+  const rs = document.getElementById('regen-sheet');
+  const is = document.getElementById('improve-sheet');
+  is.classList.remove('open');
+  rs.classList.toggle('open');
+}
+function toggleImproveSheet() {
+  // Apply to currently selected variant
+  const post = getPost(currentPostId);
+  const sel  = post?.variants?.find(v => v.selected);
+  if (sel) _improveTargetVid = sel.variant_id;
+  const is = document.getElementById('improve-sheet');
+  const rs = document.getElementById('regen-sheet');
+  rs.classList.remove('open');
+  is.classList.toggle('open');
+  if (is.classList.contains('open')) {
+    document.querySelectorAll('.improve-preset').forEach(b => b.classList.remove('active'));
+    document.getElementById('improve-custom').value = '';
+  }
+}
+function closeImproveSheet() {
+  document.getElementById('improve-sheet').classList.remove('open');
+}
+function openImproveForVariant(vid) {
+  _improveTargetVid = vid;
+  const is = document.getElementById('improve-sheet');
+  const rs = document.getElementById('regen-sheet');
+  rs.classList.remove('open');
+  is.classList.add('open');
+  document.querySelectorAll('.improve-preset').forEach(b => b.classList.remove('active'));
+  document.getElementById('improve-custom').value = '';
+  is.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+// ── Improve Submit ────────────────────────────────────────────────────────────
+let _improveTargetVid = null;
+function selectPreset(btn, instruction) {
+  document.querySelectorAll('.improve-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('improve-custom').value = instruction;
+}
+
+async function submitImprove() {
+  const vid = _improveTargetVid;
+  const instruction = document.getElementById('improve-custom').value.trim();
+  if (!vid) { toast('Keine Variante ausgewählt', 'error'); return; }
+  if (!instruction) { toast('Bitte eine Anweisung wählen oder eingeben', 'error'); return; }
+
+  closeImproveSheet();
+
+  // Show spinner in variant card
+  const improvingEl = document.getElementById('vc-improving-' + vid);
+  const bodyEl      = document.getElementById('vc-body-' + vid);
+  const charEl      = document.getElementById('vc-chars-' + vid);
+  if (improvingEl) improvingEl.style.display = 'block';
+  if (bodyEl)      bodyEl.style.opacity = '0.3';
+
+  const r = await apiPost('/vorschau/variant/verbessern', {
+    post_id: currentPostId, variant_id: vid, instruction
+  });
+  if (!r.ok) {
+    if (improvingEl) improvingEl.style.display = 'none';
+    if (bodyEl)      bodyEl.style.opacity = '';
+    toast(r.error || 'Fehler bei Verbesserung', 'error');
+    return;
+  }
+
+  // Poll for result
+  let tries = 0;
+  const poll = setInterval(async () => {
+    tries++;
+    const s = await fetch('/vorschau/variant/verbessern-status/' + vid).then(r=>r.json()).catch(()=>({}));
+    if (s.done) {
+      clearInterval(poll);
+      if (improvingEl) improvingEl.style.display = 'none';
+      if (bodyEl)      bodyEl.style.opacity = '';
+      if (s.error) { toast('Fehler: ' + s.error, 'error'); return; }
+      // Update local data + UI
+      const post = getPost(currentPostId);
+      const v = post?.variants?.find(x => x.variant_id === vid);
+      if (v) {
+        v.content = s.content;
+        v.edited  = true;
+        if (bodyEl) bodyEl.textContent = s.content;
+        const ta = document.getElementById('vc-ta-' + vid);
+        if (ta) ta.value = s.content;
+        if (charEl) {
+          const CHAR_LIMITS = {instagram:2200, facebook:500, linkedin:1300, twitter:280, tiktok:150};
+          const lim = CHAR_LIMITS[post.platform] || 2200;
+          const len = s.content.length;
+          charEl.textContent = len + '/' + lim;
+          charEl.className = len > lim ? 'char-counter over' : 'char-counter';
+        }
+      }
+      toast('✨ Variante verbessert!', 'success', 2500);
+    } else if (tries > 30) {
+      clearInterval(poll);
+      if (improvingEl) improvingEl.style.display = 'none';
+      if (bodyEl)      bodyEl.style.opacity = '';
+      toast('Zeitüberschreitung bei Verbesserung', 'error');
+    }
+  }, 1500);
+}
+
+// ── Copy to Clipboard ────────────────────────────────────────────────────────
+async function copyVariant(vid, btn) {
+  const post = getPost(currentPostId);
+  const v = post?.variants?.find(x => x.variant_id === vid);
+  if (!v?.content) return;
+  try {
+    await navigator.clipboard.writeText(v.content);
+    const orig = btn.textContent;
+    btn.textContent = '✓';
+    btn.style.color = '#22c55e';
+    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 1500);
+  } catch(e) {
+    toast('Kopieren fehlgeschlagen', 'error');
+  }
+}
+
+// ── Live Char Counter ─────────────────────────────────────────────────────────
+function updateCharCount(vid, limit, value) {
+  const el = document.getElementById('vc-chars-' + vid);
+  if (!el) return;
+  const len = value.length;
+  el.textContent = len + '/' + limit;
+  el.className = len > limit ? 'char-counter over' : 'char-counter';
+}
+
+async function regenerate(type) {
+  const btn = event.target;
+  btn.style.opacity = '.5'; btn.style.pointerEvents = 'none';
+  const pid = currentPostId;
+  // Clear variants in local state so polling waits for fresh ones
+  const post = getPost(pid);
+  if (post) post.variants = [];
+  const r = await apiPost('/vorschau/regenerieren/' + pid, { type });
+  if (r.ok) {
+    document.getElementById('regen-sheet').classList.remove('open');
+    document.getElementById('panel-body').innerHTML =
+      `<div style="text-align:center;padding:30px;color:var(--muted)">
+        <div class="spinner" style="width:22px;height:22px;border-color:rgba(255,255,255,.2);border-top-color:#60a5fa;margin:0 auto 12px"></div>
+        Neue Varianten werden generiert...
+      </div>`;
+    let tries = 0;
+    const poll = setInterval(async () => {
+      tries++;
+      const s = await fetch('/vorschau/varianten-status/' + pid).then(r=>r.json()).catch(()=>({}));
+      if (s.ready) {
+        clearInterval(poll);
+        // Update local post data with fresh variants
+        if (post) {
+          post.variants = s.variants;
+          post.approval_status = s.approval_status;
+        }
+        renderPanel(pid);
+        toast('Neue Varianten bereit!', 'success', 2500);
+      } else if (tries > 40) {
+        clearInterval(poll);
+        document.getElementById('panel-body').innerHTML =
+          '<div style="text-align:center;padding:30px;color:#f87171">✗ Zeitüberschreitung — bitte erneut versuchen.</div>';
+        btn.style.opacity = ''; btn.style.pointerEvents = '';
+      }
+    }, 2000);
+  } else {
+    btn.style.opacity = ''; btn.style.pointerEvents = '';
+    toast('Fehler bei Generierung', 'error');
+  }
+}
+
+async function cancelGeneration() {
+  await apiPost('/vorschau/woche-generieren/abbrechen');
+  document.getElementById('gen-cancel-btn').textContent = 'Abgebrochen';
+  document.getElementById('gen-status-text').textContent = '✗ Generierung abgebrochen';
+}
+
+async function approveMedia(id, btn) {
+  btn.disabled = true;
+  const r = await apiPost('/vorschau/approve-media/' + id);
+  if (r.ok) { btn.textContent = '✓'; btn.style.background='#22c55e'; }
+}
+
+// ── Woche generieren ─────────────────────────────────────────────────────────
+async function generateWeek() {
+  const btn = document.getElementById('gen-week-btn');
+  btnLoad(btn, 'Starte Generierung...');
+  document.getElementById('gen-progress').style.display = 'block';
+
+  const r = await apiPost('/vorschau/woche-generieren');
+  if (!r.ok) { toast(r.error || 'Fehler', 'error'); btnReset(btn); return; }
+
+  toast('Generierung gestartet — das dauert 1–2 Minuten', 'info', 5000);
+
+  // Poll status
+  const poll = setInterval(async () => {
+    const s = await fetch('/vorschau/woche-generieren/status').then(r=>r.json());
+    const pct = s.total > 0 ? Math.round(s.done / s.total * 100) : 0;
+    document.getElementById('gen-bar').style.width = pct + '%';
+    document.getElementById('gen-count').textContent = s.done + ' / ' + s.total + ' Posts';
+    document.getElementById('gen-status-text').textContent =
+      s.running ? `Generiere Varianten... (${s.done}/${s.total})` :
+      s.error    ? '✗ Fehler: ' + s.error :
+                   '✓ Fertig!';
+    if (!s.running) {
+      clearInterval(poll);
+      if (!s.error) {
+        toast('Woche erfolgreich generiert!', 'success');
+        setTimeout(() => location.reload(), 1000);
+      } else if (!s.error.includes('abgebrochen')) {
+        toast('Fehler: ' + s.error, 'error', 8000);
+      }
+    }
+  }, 2000);
+}
+
+// ── Keyboard Shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closePanel(); return; }
+  // Only when panel is open and focus is NOT in a textarea/input
+  if (!currentPostId) return;
+  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+
+  const post = getPost(currentPostId);
+  // Use same sort as renderPanel for consistent keyboard navigation
+  const variants = [...(post?.variants || [])].sort((a,b) => (b.ai_score||0) - (a.ai_score||0));
+
+  if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && variants.length > 1) {
+    e.preventDefault();
+    const selIdx = variants.findIndex(v => v.selected);
+    const cur = selIdx < 0 ? 0 : selIdx;
+    const next = e.key === 'ArrowRight'
+      ? (cur + 1) % variants.length
+      : (cur - 1 + variants.length) % variants.length;
+    pickVariant(variants[next].variant_id);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    approveSelected();
+  } else if (e.key === 'r' || e.key === 'R') {
+    rejectSlot();
+  }
+});
+</script>
+{% endblock %}

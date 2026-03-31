@@ -1,0 +1,588 @@
+{% extends "base.html" %}
+{% block title %}Marken-Einstellungen{% endblock %}
+
+{% block extra_head %}
+<style>
+.pdf-zone { border:2px dashed var(--border); border-radius:12px; padding:36px; text-align:center; cursor:pointer; background:var(--surface2); transition:border-color .2s; }
+.pdf-zone.drag { border-color:var(--accent); background:rgba(227,0,11,.06); }
+.pdf-zone input { display:none; }
+.fact-row { display:flex; gap:12px; margin-bottom:10px; align-items:flex-start; }
+.fact-label { font-size:12px; font-weight:700; color:var(--muted); width:130px; flex-shrink:0; padding-top:9px; text-transform:uppercase; }
+.fact-input { flex:1; padding:8px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; }
+.fact-input:focus { outline:none; border-color:#60a5fa; }
+.tag-list { display:flex; flex-wrap:wrap; gap:6px; }
+.tag { background:rgba(59,130,246,.15); color:#60a5fa; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+.token-section { border:1px solid var(--border); border-radius:10px; margin-bottom:8px; overflow:hidden; }
+.token-header { display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; background:var(--surface2); transition:background .15s; }
+.token-header:hover { background:var(--border); }
+.token-body { padding:16px; border-top:1px solid var(--border); background:var(--surface); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-title">Marken-Einstellungen</div>
+
+<div class="grid grid-2" style="align-items:start">
+  <!-- Left: PDF Upload -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="card">
+      <div class="card-title">📄 PDF-Markenwissen hochladen</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">
+        Lade dein Brand-Guide, Pitch-Deck oder Produktbeschreibung hoch.
+        Claude extrahiert automatisch alle relevanten Markeninformationen.
+      </p>
+      <div class="pdf-zone" id="pdfZone" onclick="document.getElementById('pdfInput').click()">
+        <div style="font-size:28px;margin-bottom:8px">📑</div>
+        <div style="font-weight:600;margin-bottom:4px">PDF hier reinziehen</div>
+        <div style="color:var(--muted);font-size:13px">oder klicken zum Auswählen</div>
+        <input type="file" id="pdfInput" accept=".pdf">
+      </div>
+      <div id="pdfStatus" style="margin-top:10px;font-size:13px;color:var(--muted)"></div>
+    </div>
+
+    {% if facts.get('source_pdf') %}
+    <div class="card" style="border-color:rgba(34,197,94,.3)">
+      <div class="card-title">✅ Zuletzt extrahiert</div>
+      <div style="font-size:13px;color:var(--muted)">
+        Datei: <b>{{ facts.source_pdf }}</b><br>
+        {% if facts.confirmed_by_user %}
+          <span class="badge green" style="margin-top:6px">Bestätigt</span>
+        {% else %}
+          <span class="badge yellow">Noch nicht bestätigt</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right: Current Brand Facts -->
+  <div class="card">
+    <div class="card-title">Aktuelle Marken-Infos</div>
+    <div id="brand-form">
+
+      <div class="fact-row">
+        <div class="fact-label">Firmenname</div>
+        <input class="fact-input" id="f-brand_name" value="{{ facts.get('brand_name','') }}">
+      </div>
+      <div class="fact-row">
+        <div class="fact-label">Mission</div>
+        <input class="fact-input" id="f-mission" value="{{ facts.get('mission','') }}">
+      </div>
+      <div class="fact-row">
+        <div class="fact-label">Slogan</div>
+        <input class="fact-input" id="f-slogan" value="{{ facts.get('slogan','') }}">
+      </div>
+      <div class="fact-row">
+        <div class="fact-label">Branche</div>
+        <input class="fact-input" id="f-industry" value="{{ facts.get('industry','') }}">
+      </div>
+      <div class="fact-row">
+        <div class="fact-label">Tonalität</div>
+        <input class="fact-input" id="f-tone" value="{{ (facts.get('tone_keywords') or []) | join(', ') }}">
+      </div>
+
+      {% if facts.get('values') %}
+      <div class="fact-row">
+        <div class="fact-label">Werte</div>
+        <div class="tag-list">{% for v in facts['values'] %}<span class="tag">{{ v }}</span>{% endfor %}</div>
+      </div>
+      {% endif %}
+
+      {% if facts.get('usp') %}
+      <div class="fact-row">
+        <div class="fact-label">USPs</div>
+        <div class="tag-list">{% for u in facts.usp %}<span class="tag">{{ u }}</span>{% endfor %}</div>
+      </div>
+      {% endif %}
+
+      <button class="btn btn-primary" style="width:100%;margin-top:16px" onclick="saveBrand()">
+        💾 Speichern & Bestätigen
+      </button>
+      <div id="save-status" style="text-align:center;margin-top:8px;font-size:13px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Research Agent Card -->
+<div class="card" style="margin-top:0">
+  <div class="card-title">🔍 Trend-Recherche (KI-Agent)</div>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:14px">
+    Startet einen KI-Agenten der aktuelle Trends in deiner Branche recherchiert
+    und passende Content-Themen vorschlägt.
+  </p>
+  <button class="btn btn-secondary" id="researchBtn" onclick="startResearch()">
+    🔍 Trends jetzt recherchieren
+  </button>
+  <div id="researchStatus" style="margin-top:10px;font-size:13px;color:var(--muted)"></div>
+  <div id="researchResults" style="display:none;margin-top:16px"></div>
+</div>
+
+<!-- Extraction Preview (erscheint nach Upload) -->
+<div id="extraction-preview" style="display:none" class="card" style="margin-top:20px">
+  <div class="card-title">🔍 Extrahierte Infos — bitte prüfen</div>
+  <div id="extraction-body"></div>
+  <button class="btn btn-primary" style="margin-top:14px" onclick="confirmExtraction()">✓ Bestätigen & Übernehmen</button>
+</div>
+
+<!-- API Token Einstellungen -->
+<div class="card" style="margin-top:20px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+    <div class="card-title" style="margin:0">🔑 API-Zugänge verwalten</div>
+    <a href="/einstellungen/setup" class="btn btn-secondary btn-sm">⚙️ Einrichtungs-Assistent</a>
+  </div>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:18px">
+    Trage hier deine API-Zugangsdaten ein — kein manuelles Editieren von Dateien nötig.
+  </p>
+
+  {% set platforms = [
+    ('claude',    '🤖', 'Claude AI (Pflicht)',     [('CLAUDE_API_KEY','Claude API Key','Beginnt mit sk-ant-...','password')],
+     'Hole deinen Key auf console.anthropic.com → API Keys'),
+    ('instagram', '📸', 'Instagram',               [('INSTAGRAM_ACCESS_TOKEN','Access Token','Long-lived Token...','password'),('INSTAGRAM_ACCOUNT_ID','Account ID','Numerische ID','text')],
+     'Meta for Developers → Deine App → Instagram Graph API'),
+    ('facebook',  '👍', 'Facebook',                [('FACEBOOK_ACCESS_TOKEN','Page Access Token','Token für deine Seite...','password'),('FACEBOOK_PAGE_ID','Page ID','Numerische Seiten-ID','text')],
+     'Meta for Developers → Deine App → Pages API'),
+    ('linkedin',  '💼', 'LinkedIn',                [('LINKEDIN_ACCESS_TOKEN','Access Token','OAuth 2.0 Token...','password'),('LINKEDIN_PERSON_ID','Person URN','urn:li:person:...','text')],
+     'linkedin.com/developers → Create App → OAuth 2.0'),
+    ('twitter',   '🐦', 'Twitter / X',             [('TWITTER_BEARER_TOKEN','Bearer Token','AAA...','password'),('TWITTER_API_KEY','API Key','','password'),('TWITTER_API_SECRET','API Secret','','password'),('TWITTER_ACCESS_TOKEN','Access Token','','password'),('TWITTER_ACCESS_TOKEN_SECRET','Access Token Secret','','password')],
+     'developer.twitter.com → Projects & Apps → Keys and Tokens'),
+    ('tiktok',    '🎵', 'TikTok',                  [('TIKTOK_ACCESS_TOKEN','Access Token','OAuth Access Token...','password')],
+     'developers.tiktok.com → Deine App → Content Posting API'),
+  ] %}
+
+  {% for plat_id, icon, label, fields, guide in platforms %}
+  {% set is_ok     = token_status.get(plat_id, False) %}
+  {% set is_paused = plat_id in paused_platforms %}
+  <div class="token-section" id="ts-{{ plat_id }}">
+    <div class="token-header" onclick="toggleTokenSection('{{ plat_id }}')">
+      <span style="font-size:17px">{{ icon }}</span>
+      <span style="font-weight:600;font-size:14px">{{ label }}</span>
+      <span class="badge {% if is_paused %}orange{% elif is_ok %}green{% else %}red{% endif %}" style="font-size:10px">
+        {% if is_paused %}⏸ Pausiert{% elif is_ok %}✓ Aktiv{% else %}Fehlt{% endif %}
+      </span>
+      <span style="margin-left:auto;color:var(--muted);font-size:12px">▸</span>
+    </div>
+    <div class="token-body" id="tb-{{ plat_id }}" style="display:none">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:8px 10px;background:rgba(59,130,246,.06);border-radius:6px;border-left:3px solid #3b82f6">
+        {{ guide }}
+      </div>
+      {% for env_key, field_label, placeholder, input_type in fields %}
+      <div style="margin-bottom:10px">
+        <label style="display:block;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:5px">{{ field_label }}</label>
+        <div style="display:flex;gap:8px">
+          <input
+            type="{{ input_type }}"
+            id="inp-{{ env_key }}"
+            class="fact-input"
+            style="flex:1;font-family:monospace;font-size:12px"
+            placeholder="{{ placeholder }}"
+            value="{{ token_values.get(env_key, '') if token_values.get(env_key,'') and 'dein' not in token_values.get(env_key,'') else '' }}"
+            autocomplete="off"
+          >
+        </div>
+      </div>
+      {% endfor %}
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-primary btn-sm" onclick="saveTokens('{{ plat_id }}', {{ fields|map(attribute=0)|list|tojson }})">
+          💾 Speichern
+        </button>
+        {% if plat_id != 'tiktok' %}
+        <button class="btn btn-secondary btn-sm" onclick="testToken('{{ plat_id }}', this)">
+          🔌 Verbindung testen
+        </button>
+        {% endif %}
+      </div>
+      <div id="test-result-{{ plat_id }}" style="margin-top:8px;font-size:12px;display:none"></div>
+      <!-- Pause / Resume Toggle -->
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px">
+        <span style="font-size:12px;color:var(--muted)">Plattform-Status:</span>
+        <button
+          id="pause-btn-{{ plat_id }}"
+          class="btn btn-sm {% if is_paused %}btn-secondary{% else %}btn-secondary{% endif %}"
+          style="{% if is_paused %}color:var(--green){% else %}color:var(--peach){% endif %}"
+          onclick="togglePause('{{ plat_id }}', {{ 'false' if is_paused else 'true' }}, this)">
+          {% if is_paused %}▶ Fortsetzen{% else %}⏸ Pausieren{% endif %}
+        </button>
+        <span id="pause-badge-{{ plat_id }}" class="badge {% if is_paused %}orange{% else %}green{% endif %}" style="font-size:11px">
+          {% if is_paused %}Pausiert — wird nicht gepostet{% else %}Aktiv — postet nach Plan{% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <!-- E-Mail Benachrichtigungen -->
+  <div class="token-section" id="ts-email">
+    <div class="token-header" onclick="toggleTokenSection('email')">
+      <span style="font-size:17px">📧</span>
+      <span style="font-weight:600;font-size:14px">E-Mail Benachrichtigungen</span>
+      {% set email_ok = token_values.get('SMTP_PASSWORD','') and 'dein' not in token_values.get('SMTP_PASSWORD','') %}
+      <span class="badge {% if email_ok %}green{% else %}grey{% endif %}" style="font-size:10px">
+        {% if email_ok %}✓ Aktiv{% else %}Optional{% endif %}
+      </span>
+      <span style="margin-left:auto;color:var(--muted);font-size:12px">▸</span>
+    </div>
+    <div class="token-body" id="tb-email" style="display:none">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:8px 10px;background:rgba(59,130,246,.06);border-radius:6px;border-left:3px solid #3b82f6">
+        Gmail: Konto → Sicherheit → App-Passwörter → Neues App-Passwort erstellen
+      </div>
+      {% for env_key, field_label, placeholder in [('NOTIFY_EMAIL','Benachrichtigungs-Empfänger','deine@email.de'),('SMTP_EMAIL','Absender Gmail-Adresse','sender@gmail.com'),('SMTP_PASSWORD','Gmail App-Passwort','xxxx xxxx xxxx xxxx')] %}
+      <div style="margin-bottom:10px">
+        <label style="display:block;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-bottom:5px">{{ field_label }}</label>
+        <input type="{% if 'PASSWORD' in env_key %}password{% else %}email{% endif %}" id="inp-{{ env_key }}" class="fact-input"
+               style="width:100%;font-family:monospace;font-size:12px" placeholder="{{ placeholder }}"
+               value="{{ token_values.get(env_key,'') if token_values.get(env_key,'') else '' }}" autocomplete="off">
+      </div>
+      {% endfor %}
+      <button class="btn btn-primary btn-sm" style="margin-top:4px"
+              onclick="saveTokens('email', ['NOTIFY_EMAIL','SMTP_EMAIL','SMTP_PASSWORD'])">
+        💾 Speichern
+      </button>
+      <div id="test-result-email" style="margin-top:8px;font-size:12px;display:none"></div>
+    </div>
+  </div>
+
+  {% set missing = token_status.values()|reject|list|length %}
+  <div style="margin-top:16px;padding:10px 14px;border-radius:8px;font-size:13px;
+    {% if missing == 0 %}background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);color:#22c55e
+    {% else %}background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2){% endif %}">
+    {% if missing == 0 %}✓ Alle Plattformen konfiguriert — der Bot ist bereit!
+    {% else %}⚠️ <b>{{ missing }} Plattform(en) nicht konfiguriert.</b> Klicke auf eine Plattform oben um den Token einzutragen.{% endif %}
+  </div>
+</div>
+
+<!-- Generierungsmodus -->
+<div class="card" style="margin-top:20px">
+  <div class="card-title">⚡ Generierungsmodus</div>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:18px">
+    Wann soll der Bot Varianten für deine geplanten Posts generieren?
+  </p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+    <label id="mode-weekly" style="border:2px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:border-color .15s;display:block" onclick="selectGenMode('weekly')">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:18px">📅</span>
+        <span style="font-weight:700;font-size:14px">Woche vorgenerieren</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5">
+        Alle Posts der Woche werden auf einmal generiert. Du gehst sie in Ruhe durch und gibst frei.
+      </div>
+    </label>
+    <label id="mode-jit" style="border:2px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:border-color .15s;display:block" onclick="selectGenMode('jit')">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:18px">⏱</span>
+        <span style="font-weight:700;font-size:14px">Just-in-Time</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5">
+        Kurz vor jedem Post bekommst du eine Benachrichtigung: "Wähle deine Variante."
+      </div>
+    </label>
+  </div>
+  <div id="jit-options" style="display:none;padding:12px;background:var(--surface2);border-radius:8px;margin-bottom:16px">
+    <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:8px">Wie viele Stunden vorher benachrichtigen?</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap" id="hours-pills">
+      {% for h, label in [(1,'1 Std.'),(2,'2 Std.'),(4,'4 Std.'),(8,'8 Std.'),(24,'1 Tag')] %}
+      <button class="hours-pill" data-h="{{ h }}" onclick="selectHours({{ h }})" style="
+        padding:6px 14px;border-radius:16px;border:1px solid var(--border);
+        background:var(--surface);color:var(--muted);font-size:12px;cursor:pointer;transition:all .15s">
+        {{ label }}
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <button class="btn btn-primary btn-sm" onclick="saveGenMode()">💾 Speichern</button>
+    <span id="gen-save-status" style="font-size:12px;color:var(--green)"></span>
+  </div>
+</div>
+
+<script>
+async function startResearch() {
+  const btn = document.getElementById('researchBtn');
+  const status = document.getElementById('researchStatus');
+  btn.disabled = true;
+  btn.textContent = '⏳ Recherche läuft...';
+  status.textContent = 'KI-Agent sucht aktuelle Trends — das dauert 1-2 Minuten...';
+  try {
+    const r = await fetch('/api/research-trends', {method:'POST'});
+    const j = await r.json();
+    if (!j.ok) { status.textContent = '⚠️ ' + (j.error || 'Fehler'); btn.disabled=false; btn.textContent='🔍 Trends jetzt recherchieren'; return; }
+    pollResearch();
+  } catch(e) { status.textContent = 'Fehler: ' + e.message; btn.disabled=false; btn.textContent='🔍 Trends jetzt recherchieren'; }
+}
+
+async function pollResearch() {
+  const status = document.getElementById('researchStatus');
+  const results = document.getElementById('researchResults');
+  const btn = document.getElementById('researchBtn');
+  const r = await fetch('/api/research-trends');
+  const j = await r.json();
+  if (j.running) { setTimeout(pollResearch, 5000); return; }
+  if (j.status === 'error') {
+    status.textContent = '⚠️ ' + j.error;
+    btn.disabled = false; btn.textContent = '🔍 Trends jetzt recherchieren';
+    return;
+  }
+  if (j.status === 'done') {
+    status.textContent = `✅ Recherche abgeschlossen (${new Date(j.researched_at).toLocaleString('de-DE')})`;
+    btn.disabled = false; btn.textContent = '🔄 Erneut recherchieren';
+    showResearchResults(j);
+  }
+}
+
+function showResearchResults(data) {
+  const el = document.getElementById('researchResults');
+  el.style.display = 'block';
+  const topicsHtml = (data.suggested_topics || []).map((t,i) => `
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer">
+      <input type="checkbox" value="${t}" checked style="accent-color:var(--accent)">
+      <span style="font-size:13px">${t}</span>
+    </label>`).join('');
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:700;text-transform:uppercase">Vorgeschlagene Content-Themen</div>
+    ${topicsHtml}
+    <div style="font-size:12px;color:var(--muted);margin-top:8px;font-style:italic">${data.reasoning || ''}</div>
+    <button class="btn btn-primary" style="margin-top:12px;width:100%" onclick="applyResearch()">
+      ✅ Ausgewählte Themen übernehmen
+    </button>`;
+}
+
+async function applyResearch() {
+  const checked = [...document.querySelectorAll('#researchResults input[type=checkbox]:checked')].map(el => el.value);
+  if (!checked.length) { alert('Bitte mindestens ein Thema auswählen'); return; }
+  const r = await fetch('/api/research-apply', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({topics:checked})});
+  const j = await r.json();
+  if (j.ok) {
+    document.getElementById('researchStatus').textContent = `✅ ${checked.length} Themen als Content-Säulen gespeichert!`;
+    document.getElementById('researchResults').style.display = 'none';
+  }
+}
+
+// Beim Laden: Falls Recherche läuft oder Ergebnis vorhanden
+(async () => {
+  const r = await fetch('/api/research-trends');
+  const j = await r.json();
+  if (j.running) {
+    document.getElementById('researchBtn').disabled = true;
+    document.getElementById('researchBtn').textContent = '⏳ Recherche läuft...';
+    document.getElementById('researchStatus').textContent = 'KI-Agent läuft noch...';
+    pollResearch();
+  } else if (j.status === 'done') {
+    document.getElementById('researchStatus').textContent = `Letzte Recherche: ${new Date(j.researched_at).toLocaleString('de-DE')}`;
+    showResearchResults(j);
+  }
+})();
+</script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let extractedFacts = null;
+
+// ── PDF Upload ────────────────────────────────────────────────────────────────
+const zone = document.getElementById('pdfZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag'); uploadPDF(e.dataTransfer.files[0]); });
+document.getElementById('pdfInput').addEventListener('change', e => uploadPDF(e.target.files[0]));
+
+async function uploadPDF(file) {
+  if (!file) return;
+  const status = document.getElementById('pdfStatus');
+  status.textContent = '⏳ Claude liest das Dokument... (ca. 20-30s)';
+
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await fetch('/einstellungen/marke/pdf-upload', { method:'POST', body:fd });
+  const j = await r.json();
+
+  if (j.ok) {
+    extractedFacts = j.facts;
+    status.textContent = '✓ Extraktion abgeschlossen!';
+    showExtractionPreview(j.facts);
+  } else {
+    status.textContent = '✗ Fehler: ' + j.error;
+  }
+}
+
+function showExtractionPreview(facts) {
+  const container = document.getElementById('extraction-body');
+  let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">';
+  const fields = [
+    ['Firmenname', facts.brand_name],
+    ['Mission',    facts.mission],
+    ['Branche',    facts.industry],
+    ['Tonalität',  (facts.tone_keywords||[]).join(', ')],
+  ];
+  fields.forEach(([label, val]) => {
+    if (val) html += `<div style="background:var(--surface2);padding:10px;border-radius:8px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:3px">${label}</div>
+      <div style="font-size:13px">${val}</div>
+    </div>`;
+  });
+  html += '</div>';
+  if (facts.values?.length) {
+    html += '<div style="margin-top:12px"><div style="font-size:12px;color:var(--muted);margin-bottom:6px">WERTE</div><div style="display:flex;flex-wrap:wrap;gap:6px">';
+    facts.values.forEach(v => html += `<span class="tag">${v}</span>`);
+    html += '</div></div>';
+  }
+  container.innerHTML = html;
+  document.getElementById('extraction-preview').style.display = 'block';
+
+  // Felder vorausfüllen
+  if (facts.brand_name) document.getElementById('f-brand_name').value = facts.brand_name;
+  if (facts.mission)    document.getElementById('f-mission').value    = facts.mission;
+  if (facts.slogan)     document.getElementById('f-slogan').value     = facts.slogan;
+  if (facts.industry)   document.getElementById('f-industry').value   = facts.industry;
+  if (facts.tone_keywords) document.getElementById('f-tone').value    = facts.tone_keywords.join(', ');
+}
+
+async function confirmExtraction() {
+  if (!extractedFacts) return;
+  const r = await apiPost('/einstellungen/marke/bestaetigen', extractedFacts);
+  if (r.ok) {
+    document.getElementById('extraction-preview').style.display = 'none';
+    document.getElementById('pdfStatus').textContent = '✓ Marken-Infos bestätigt und gespeichert!';
+  }
+}
+
+async function saveBrand() {
+  const data = {
+    brand_name:    document.getElementById('f-brand_name').value,
+    mission:       document.getElementById('f-mission').value,
+    slogan:        document.getElementById('f-slogan').value,
+    industry:      document.getElementById('f-industry').value,
+    tone_keywords: document.getElementById('f-tone').value.split(',').map(s=>s.trim()).filter(Boolean),
+  };
+  const r = await apiPost('/einstellungen/marke/bestaetigen', data);
+  const st = document.getElementById('save-status');
+  st.textContent = r.ok ? '✓ Gespeichert!' : '✗ Fehler';
+  st.style.color = r.ok ? '#22c55e' : '#f87171';
+}
+
+// ── Platform Pause / Resume ───────────────────────────────────────────────────
+async function togglePause(platform, newPaused, btn) {
+  const r = await apiPost('/einstellungen/plattform-pause', { platform, paused: newPaused });
+  if (!r.ok) { toast('Fehler beim Speichern', 'error'); return; }
+  const badge      = document.getElementById('pause-badge-' + platform);
+  const headerBadge = document.querySelector('#ts-' + platform + ' .token-header .badge');
+  if (newPaused) {
+    btn.textContent = '▶ Fortsetzen';
+    btn.style.color = 'var(--green)';
+    btn.setAttribute('onclick', `togglePause('${platform}', false, this)`);
+    if (badge) { badge.className = 'badge orange'; badge.style.fontSize = '11px'; badge.textContent = 'Pausiert — wird nicht gepostet'; }
+    if (headerBadge) { headerBadge.className = 'badge orange'; headerBadge.textContent = '⏸ Pausiert'; }
+    toast(`⏸ ${platform} pausiert`, 'success');
+  } else {
+    btn.textContent = '⏸ Pausieren';
+    btn.style.color = 'var(--peach)';
+    btn.setAttribute('onclick', `togglePause('${platform}', true, this)`);
+    if (badge) { badge.className = 'badge green'; badge.style.fontSize = '11px'; badge.textContent = 'Aktiv — postet nach Plan'; }
+    if (headerBadge) { headerBadge.className = 'badge green'; headerBadge.textContent = '✓ Aktiv'; }
+    toast(`▶ ${platform} fortgesetzt`, 'success');
+  }
+}
+
+// ── Token Management ─────────────────────────────────────────────────────────
+function toggleTokenSection(id) {
+  const body = document.getElementById('tb-' + id);
+  const header = document.querySelector('#ts-' + id + ' .token-header');
+  const arrow = header.querySelector('span:last-child');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.textContent = isOpen ? '▸' : '▾';
+}
+
+async function saveTokens(platId, keys) {
+  const data = {};
+  for (const key of keys) {
+    const el = document.getElementById('inp-' + key);
+    if (el && el.value.trim()) data[key] = el.value.trim();
+  }
+  if (!Object.keys(data).length) {
+    toast('Kein Token eingegeben', 'error'); return;
+  }
+  const r = await apiPost('/einstellungen/token-speichern', data);
+  if (r.ok) {
+    toast('✓ Gespeichert!', 'success');
+    // Update status badge in header
+    const header = document.querySelector('#ts-' + platId + ' .badge');
+    if (header) { header.className = 'badge green'; header.style.fontSize = '10px'; header.textContent = '✓ Konfiguriert'; }
+    // Auto-close section after a short delay
+    setTimeout(() => {
+      const body = document.getElementById('tb-' + platId);
+      const arrow = document.querySelector('#ts-' + platId + ' .token-header span:last-child');
+      if (body) body.style.display = 'none';
+      if (arrow) arrow.textContent = '▸';
+    }, 600);
+  } else {
+    toast('Fehler: ' + (r.error || 'Unbekannt'), 'error');
+  }
+}
+
+async function testToken(platId, btn) {
+  btnLoad(btn, 'Teste...');
+  const result = document.getElementById('test-result-' + platId);
+  result.style.display = 'none';
+  const r = await apiPost('/einstellungen/token-testen', { platform: platId });
+  btnReset(btn);
+  result.style.display = 'block';
+  if (r.ok === true) {
+    result.innerHTML = `<span style="color:#22c55e">✓ ${r.msg}</span>`;
+  } else if (r.ok === false) {
+    result.innerHTML = `<span style="color:#f87171">✗ ${r.msg}</span>`;
+  } else {
+    result.innerHTML = `<span style="color:#f59e0b">⚠ ${r.msg}</span>`;
+  }
+}
+
+// ── Generation Mode ───────────────────────────────────────────────────────────
+let _genMode = 'weekly';
+let _genHours = 4;
+
+function selectGenMode(mode) {
+  _genMode = mode;
+  const weekly = document.getElementById('mode-weekly');
+  const jit    = document.getElementById('mode-jit');
+  const accent = 'var(--accent)';
+  const def    = 'var(--border)';
+  weekly.style.borderColor = mode === 'weekly' ? accent : def;
+  jit.style.borderColor    = mode === 'jit'    ? accent : def;
+  document.getElementById('jit-options').style.display = mode === 'jit' ? 'block' : 'none';
+}
+
+function selectHours(h) {
+  _genHours = h;
+  document.querySelectorAll('.hours-pill').forEach(p => {
+    const active = parseInt(p.dataset.h) === h;
+    p.style.background   = active ? 'var(--accent)'   : 'var(--surface)';
+    p.style.color        = active ? '#fff'             : 'var(--muted)';
+    p.style.borderColor  = active ? 'var(--accent)'   : 'var(--border)';
+  });
+}
+
+async function saveGenMode() {
+  const st = document.getElementById('gen-save-status');
+  st.textContent = '⏳ Speichere...';
+  const r = await apiPost('/api/generation-config', { mode: _genMode, hours_before: _genHours });
+  if (r.ok) {
+    st.textContent = '✓ Gespeichert!';
+    toast('⚡ Generierungsmodus gespeichert', 'success');
+    setTimeout(() => st.textContent = '', 3000);
+  } else {
+    st.textContent = '✗ Fehler';
+    st.style.color = 'var(--red)';
+  }
+}
+
+// Init: load current generation config
+(async () => {
+  try {
+    const r = await fetch('/api/generation-config');
+    const j = await r.json();
+    _genMode  = j.mode  || 'weekly';
+    _genHours = j.hours_before || 4;
+    selectGenMode(_genMode);
+    selectHours(_genHours);
+  } catch(e) {}
+})();
+</script>
+{% endblock %}

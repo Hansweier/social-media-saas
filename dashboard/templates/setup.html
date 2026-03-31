@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Einrichtungs-Assistent — Sozibot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #11111b; --surface: #1e1e2e; --surface2: #313244;
+      --border: #313244; --accent: #cba6f7; --accent2: #b4befe;
+      --text: #cdd6f4; --muted: #a6adc8; --subdued: #6c7086;
+      --green: #a6e3a1; --blue: #89b4fa; --yellow: #f9e2af; --peach: #fab387;
+    }
+    body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 32px 16px 60px; -webkit-font-smoothing: antialiased; }
+    .wizard { width: 100%; max-width: 680px; }
+
+    /* Header */
+    .wizard-header { text-align: center; margin-bottom: 32px; }
+    .wizard-header .logo { font-size: 32px; margin-bottom: 12px; }
+    .wizard-header h1 { font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+    .wizard-header p { font-size: 14px; color: var(--muted); }
+
+    /* Progress */
+    .progress-bar { display: flex; align-items: center; justify-content: center; gap: 0; margin-bottom: 36px; }
+    .step-dot { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--border); background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--muted); transition: all .3s; flex-shrink: 0; position: relative; z-index: 1; }
+    .step-dot.active { border-color: var(--accent); background: linear-gradient(135deg,var(--accent),var(--accent2)); color: #11111b; box-shadow: 0 0 12px rgba(203,166,247,.4); }
+    .step-dot.done { border-color: var(--green); background: rgba(166,227,161,.2); color: var(--green); }
+    .step-line { flex: 1; height: 2px; background: var(--border); max-width: 60px; transition: background .3s; }
+    .step-line.done { background: var(--green); }
+
+    /* Cards */
+    .step-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; display: none; animation: fadeIn .25s ease; }
+    .step-card.active { display: block; }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform:none; } }
+    .step-title { font-size: 19px; font-weight: 700; margin-bottom: 6px; }
+    .step-sub { font-size: 13px; color: var(--muted); margin-bottom: 22px; line-height: 1.6; }
+
+    /* Fields */
+    .field-group { margin-bottom: 16px; }
+    .field-group label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 6px; }
+    .field-group input { width: 100%; padding: 10px 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; font-family: monospace; transition: border-color .15s; }
+    .field-group input:focus { outline: none; border-color: var(--blue); }
+    .field-hint { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+    .guide-link { display: inline-block; margin-top: 5px; font-size: 12px; color: var(--blue); }
+
+    /* Checkbox platform */
+    .platform-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 8px; }
+    .plat-card { background: var(--surface2); border: 2px solid var(--border); border-radius: 10px; padding: 14px 12px; cursor: pointer; text-align: center; transition: all .15s; user-select: none; }
+    .plat-card:hover { border-color: var(--muted); }
+    .plat-card.selected { border-color: var(--accent); background: rgba(203,166,247,.08); }
+    .plat-card .icon { font-size: 22px; margin-bottom: 6px; }
+    .plat-card .name { font-size: 13px; font-weight: 600; }
+    .plat-card input { display: none; }
+
+    /* Buttons */
+    .btn { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; transition: all .15s; display: inline-flex; align-items: center; gap: 7px; }
+    .btn:hover:not(:disabled) { opacity: .85; transform: translateY(-1px); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #11111b; box-shadow: 0 2px 12px rgba(203,166,247,.3); }
+    .btn-primary:hover:not(:disabled) { box-shadow: 0 4px 20px rgba(203,166,247,.45); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid rgba(203,166,247,.12); }
+    .btn-success { background: rgba(166,227,161,.2); color: var(--green); border: 1px solid rgba(166,227,161,.3); }
+    .btn-row { display: flex; gap: 10px; justify-content: space-between; align-items: center; margin-top: 22px; }
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3); border-top-color: white; border-radius: 50%; animation: spin .6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Test result */
+    .test-result { margin-top: 8px; font-size: 12px; min-height: 18px; }
+    .test-ok { color: var(--green); }
+    .test-fail { color: #f87171; }
+    .test-warn { color: var(--yellow); }
+
+    /* Done state */
+    .done-screen { text-align: center; padding: 20px 0; }
+    .done-screen .checkmark { font-size: 64px; margin-bottom: 16px; }
+    .done-screen h2 { font-size: 22px; font-weight: 800; margin-bottom: 10px; }
+    .done-screen p { font-size: 14px; color: var(--muted); max-width: 440px; margin: 0 auto 24px; line-height: 1.7; }
+
+    /* Skip link */
+    .skip-link { text-align: center; margin-top: 16px; font-size: 12px; color: var(--muted); }
+    .skip-link a { color: var(--muted); }
+  </style>
+</head>
+<body>
+<div class="wizard">
+
+  <!-- Header -->
+  <div class="wizard-header">
+    <div class="logo">
+      <!-- Nuna — flat icon style, same as sidebar -->
+      <svg width="72" height="72" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="9" fill="#313244"/>
+        <path d="M8 15 L7 5 L15 13 Z"  fill="#cba6f7"/>
+        <path d="M28 15 L29 5 L21 13 Z" fill="#cba6f7"/>
+        <path d="M9 13.5 L8.5 7 L14 12 Z"  fill="#f38ba8" opacity=".7"/>
+        <path d="M27 13.5 L27.5 7 L22 12 Z" fill="#f38ba8" opacity=".7"/>
+        <circle cx="18" cy="22" r="11" fill="#45475a"/>
+        <circle cx="13.5" cy="21" r="3"   fill="#cdd6f4"/>
+        <circle cx="22.5" cy="21" r="3"   fill="#cdd6f4"/>
+        <circle cx="13.5" cy="21" r="1.5" fill="#1e1e2e"/>
+        <circle cx="22.5" cy="21" r="1.5" fill="#1e1e2e"/>
+        <circle cx="14.3" cy="20" r=".8"  fill="white"/>
+        <circle cx="23.3" cy="20" r=".8"  fill="white"/>
+        <ellipse cx="9"  cy="24.5" rx="2.5" ry="1.5" fill="#f38ba8" opacity=".3"/>
+        <ellipse cx="27" cy="24.5" rx="2.5" ry="1.5" fill="#f38ba8" opacity=".3"/>
+        <ellipse cx="18" cy="24.5" rx="1.2" ry=".9" fill="#f38ba8"/>
+        <path d="M16 26 Q18 27.8 20 26" stroke="#a6adc8" stroke-width=".9" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <h1><span style="color:var(--accent)">Sozi</span><span style="font-size:18px;font-weight:500;color:var(--muted)">bot</span> einrichten</h1>
+    <p>In wenigen Schritten einsatzbereit — kein technisches Wissen nötig.</p>
+  </div>
+
+  <!-- Progress dots -->
+  <div class="progress-bar" id="progressBar">
+    <div class="step-dot active" id="dot-1">1</div>
+    <div class="step-line" id="line-1"></div>
+    <div class="step-dot" id="dot-2">2</div>
+    <div class="step-line" id="line-2"></div>
+    <div class="step-dot" id="dot-3">3</div>
+    <div class="step-line" id="line-3"></div>
+    <div class="step-dot" id="dot-4">4</div>
+    <div class="step-line" id="line-4"></div>
+    <div class="step-dot" id="dot-5">5</div>
+  </div>
+
+  <!-- Step 1: Claude API Key -->
+  <div class="step-card active" id="step-1">
+    <div class="step-title">Schritt 1 — Claude AI verbinden</div>
+    <div class="step-sub">
+      Der Bot nutzt Claude AI um Social-Media-Posts zu schreiben. Du brauchst dafür einen API Key von Anthropic — das ist die KI dahinter.
+    </div>
+    <div class="field-group">
+      <label>Claude API Key</label>
+      <input type="password" id="s1-CLAUDE_API_KEY" placeholder="sk-ant-api03-..."
+             value="{{ token_values.get('CLAUDE_API_KEY','') if token_values.get('CLAUDE_API_KEY','') and 'dein' not in token_values.get('CLAUDE_API_KEY','') else '' }}"
+             oninput="clearResult('s1-test')">
+      <div class="field-hint">
+        Hole deinen Key hier: <strong>console.anthropic.com → API Keys → Create Key</strong><br>
+        Der Key beginnt immer mit <code>sk-ant-</code>
+      </div>
+    </div>
+    <button class="btn btn-secondary" style="margin-bottom:6px" onclick="testStep1(this)">🔌 Key jetzt testen</button>
+    <div class="test-result" id="s1-test"></div>
+    <div class="btn-row">
+      <div></div>
+      <button class="btn btn-primary" onclick="saveAndNext(1, {'CLAUDE_API_KEY': 's1-CLAUDE_API_KEY'}, true)">
+        Weiter →
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2: Choose platforms -->
+  <div class="step-card" id="step-2">
+    <div class="step-title">Schritt 2 — Plattformen wählen</div>
+    <div class="step-sub">
+      Auf welchen Plattformen soll der Bot posten? Du kannst auch später Plattformen hinzufügen oder entfernen.
+    </div>
+    <div class="platform-grid">
+      {% set plat_defs = [('instagram','📸','Instagram'),('facebook','👍','Facebook'),('linkedin','💼','LinkedIn'),('twitter','🐦','Twitter / X'),('tiktok','🎵','TikTok')] %}
+      {% for pid, icon, name in plat_defs %}
+      <div class="plat-card {% if token_status.get(pid) %}selected{% endif %}" id="pc-{{ pid }}" onclick="togglePlatform('{{ pid }}')">
+        <div class="icon">{{ icon }}</div>
+        <div class="name">{{ name }}</div>
+        <input type="checkbox" id="plat-{{ pid }}" {% if token_status.get(pid) %}checked{% endif %}>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goTo(1)">← Zurück</button>
+      <button class="btn btn-primary" onclick="goTo(3)">Weiter →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Platform tokens -->
+  <div class="step-card" id="step-3">
+    <div class="step-title">Schritt 3 — Plattform-Zugänge</div>
+    <div class="step-sub">
+      Trage die API-Zugangsdaten für die gewählten Plattformen ein. Klicke auf den Anleitungs-Link für Schritt-für-Schritt-Hilfe.
+    </div>
+    <div id="platform-fields"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goTo(2)">← Zurück</button>
+      <button class="btn btn-primary" onclick="savePlatformsAndNext()">Weiter →</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Email notifications -->
+  <div class="step-card" id="step-4">
+    <div class="step-title">Schritt 4 — E-Mail Benachrichtigungen</div>
+    <div class="step-sub">
+      Erhalte eine E-Mail wenn Posts fehlschlagen oder Kunden eskalieren. Dieser Schritt ist <strong>optional</strong>.
+    </div>
+    <div class="field-group">
+      <label>Benachrichtigungs-Empfänger (deine E-Mail)</label>
+      <input type="email" id="s4-NOTIFY_EMAIL" placeholder="info@deinefirma.de"
+             value="{{ token_values.get('NOTIFY_EMAIL','') }}">
+    </div>
+    <div class="field-group">
+      <label>Gmail-Absender-Adresse</label>
+      <input type="email" id="s4-SMTP_EMAIL" placeholder="bot@gmail.com"
+             value="{{ token_values.get('SMTP_EMAIL','') }}">
+    </div>
+    <div class="field-group">
+      <label>Gmail App-Passwort</label>
+      <input type="password" id="s4-SMTP_PASSWORD" placeholder="xxxx xxxx xxxx xxxx"
+             value="{{ token_values.get('SMTP_PASSWORD','') if token_values.get('SMTP_PASSWORD','') and 'dein' not in token_values.get('SMTP_PASSWORD','') else '' }}">
+      <div class="field-hint">
+        Gmail → Konto → Sicherheit → App-Passwörter → neues Passwort für "Mail" erstellen
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goTo(3)">← Zurück</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="goTo(5)">Überspringen</button>
+        <button class="btn btn-primary" onclick="saveAndNext(4, {'NOTIFY_EMAIL':'s4-NOTIFY_EMAIL','SMTP_EMAIL':'s4-SMTP_EMAIL','SMTP_PASSWORD':'s4-SMTP_PASSWORD'}, false)">
+          Speichern & Weiter →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 5: Done -->
+  <div class="step-card" id="step-5">
+    <div class="done-screen">
+      <div class="checkmark">🎉</div>
+      <h2>Der Bot ist bereit!</h2>
+      <p>
+        Alle Zugangsdaten sind gespeichert. Der Bot kann jetzt automatisch Posts generieren
+        und auf deinen Plattformen veröffentlichen.
+      </p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <a href="/" class="btn btn-success" style="text-decoration:none">→ Zum Dashboard</a>
+        <a href="/einstellungen/marke" class="btn btn-secondary" style="text-decoration:none">⚙️ Alle Einstellungen</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="skip-link">
+    <a href="/">Dashboard überspringen und direkt starten →</a>
+  </div>
+</div>
+
+<script>
+let _currentStep = 1;
+
+const PLATFORM_CONFIGS = {
+  instagram: {
+    icon: '📸', name: 'Instagram',
+    guide: 'developers.facebook.com → Deine App → Instagram Graph API → Zugangsdaten',
+    fields: [
+      { key: 'INSTAGRAM_ACCESS_TOKEN', label: 'Access Token', placeholder: 'EAAGm0PX4...' },
+      { key: 'INSTAGRAM_ACCOUNT_ID',   label: 'Account ID (Numerisch)', placeholder: '17841400...' },
+    ]
+  },
+  facebook: {
+    icon: '👍', name: 'Facebook',
+    guide: 'developers.facebook.com → Deine App → Pages API → Page Access Token',
+    fields: [
+      { key: 'FACEBOOK_ACCESS_TOKEN', label: 'Page Access Token', placeholder: 'EAAGm0PX4...' },
+      { key: 'FACEBOOK_PAGE_ID',      label: 'Page ID (Numerisch)', placeholder: '123456789...' },
+    ]
+  },
+  linkedin: {
+    icon: '💼', name: 'LinkedIn',
+    guide: 'linkedin.com/developers → Create App → OAuth 2.0 → Access Token generieren',
+    fields: [
+      { key: 'LINKEDIN_ACCESS_TOKEN', label: 'Access Token', placeholder: 'AQX...' },
+      { key: 'LINKEDIN_PERSON_ID',    label: 'Person URN', placeholder: 'urn:li:person:abc123' },
+    ]
+  },
+  twitter: {
+    icon: '🐦', name: 'Twitter / X',
+    guide: 'developer.twitter.com → Projects & Apps → Keys and Tokens',
+    fields: [
+      { key: 'TWITTER_BEARER_TOKEN',        label: 'Bearer Token', placeholder: 'AAAA...' },
+      { key: 'TWITTER_API_KEY',             label: 'API Key', placeholder: '' },
+      { key: 'TWITTER_API_SECRET',          label: 'API Secret', placeholder: '' },
+      { key: 'TWITTER_ACCESS_TOKEN',        label: 'Access Token', placeholder: '' },
+      { key: 'TWITTER_ACCESS_TOKEN_SECRET', label: 'Access Token Secret', placeholder: '' },
+    ]
+  },
+  tiktok: {
+    icon: '🎵', name: 'TikTok',
+    guide: 'developers.tiktok.com → Deine App → Content Posting API → Access Token',
+    fields: [
+      { key: 'TIKTOK_ACCESS_TOKEN', label: 'Access Token', placeholder: 'act.xxx...' },
+    ]
+  }
+};
+
+// Pre-fill saved values
+const savedValues = {{ token_values | tojson }};
+
+function goTo(step) {
+  document.getElementById('step-' + _currentStep).classList.remove('active');
+  document.getElementById('dot-' + _currentStep).classList.remove('active');
+  document.getElementById('dot-' + _currentStep).classList.add('done');
+  if (step > _currentStep) {
+    for (let i = _currentStep; i < step; i++) {
+      const line = document.getElementById('line-' + i);
+      if (line) line.classList.add('done');
+    }
+  }
+  _currentStep = step;
+  const card = document.getElementById('step-' + step);
+  card.classList.add('active');
+  const dot = document.getElementById('dot-' + step);
+  dot.classList.remove('done');
+  dot.classList.add('active');
+  if (step === 3) renderPlatformFields();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function togglePlatform(id) {
+  const card = document.getElementById('pc-' + id);
+  const cb   = document.getElementById('plat-' + id);
+  card.classList.toggle('selected');
+  cb.checked = card.classList.contains('selected');
+}
+
+function renderPlatformFields() {
+  const container = document.getElementById('platform-fields');
+  const selected = ['instagram','facebook','linkedin','twitter','tiktok']
+    .filter(p => document.getElementById('plat-' + p)?.checked);
+
+  if (!selected.length) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px 0">Keine Plattform ausgewählt — zurück zu Schritt 2.</div>';
+    return;
+  }
+
+  let html = '';
+  selected.forEach(pid => {
+    const cfg = PLATFORM_CONFIGS[pid];
+    html += `<div style="margin-bottom:20px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <div style="padding:12px 16px;background:var(--surface2);display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px">${cfg.icon}</span>
+        <span style="font-weight:700">${cfg.name}</span>
+        <span id="test-badge-${pid}" style="margin-left:auto;font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div style="padding:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:7px 10px;background:rgba(59,130,246,.06);border-radius:6px;border-left:3px solid #3b82f6">${cfg.guide}</div>`;
+    cfg.fields.forEach(f => {
+      const val = (savedValues[f.key] && !savedValues[f.key].includes('dein')) ? savedValues[f.key] : '';
+      html += `<div style="margin-bottom:10px">
+        <label style="display:block;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:5px">${f.label}</label>
+        <input type="password" id="s3-${f.key}" placeholder="${f.placeholder}"
+               style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:monospace"
+               value="${val}" autocomplete="off">
+      </div>`;
+    });
+    if (pid !== 'tiktok') {
+      html += `<button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testPlatform('${pid}', this)">🔌 Testen</button>
+               <span id="test-result-${pid}" style="font-size:12px;margin-left:10px"></span>`;
+    }
+    html += '</div></div>';
+  });
+  container.innerHTML = html;
+}
+
+async function testStep1(btn) {
+  const key = document.getElementById('s1-CLAUDE_API_KEY').value.trim();
+  if (!key) { showResult('s1-test', 'fail', 'Bitte Key eingeben'); return; }
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Teste...';
+  // Save first, then test
+  await fetch('/einstellungen/token-speichern', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({CLAUDE_API_KEY: key})
+  });
+  const r = await fetch('/einstellungen/token-testen', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({platform:'claude'})
+  }).then(x=>x.json());
+  btn.disabled = false; btn.innerHTML = '🔌 Key jetzt testen';
+  showResult('s1-test', r.ok ? 'ok' : 'fail', r.msg);
+}
+
+async function testPlatform(pid, btn) {
+  const cfg = PLATFORM_CONFIGS[pid];
+  const data = {};
+  cfg.fields.forEach(f => {
+    const el = document.getElementById('s3-' + f.key);
+    if (el && el.value.trim()) data[f.key] = el.value.trim();
+  });
+  if (!Object.keys(data).length) { showInline('test-result-' + pid, 'fail', 'Keine Daten eingegeben'); return; }
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  await fetch('/einstellungen/token-speichern', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)
+  });
+  const r = await fetch('/einstellungen/token-testen', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({platform: pid})
+  }).then(x=>x.json());
+  btn.disabled = false; btn.innerHTML = '🔌 Testen';
+  showInline('test-result-' + pid, r.ok === true ? 'ok' : r.ok === null ? 'warn' : 'fail', r.msg);
+}
+
+function showResult(id, type, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const cls = type === 'ok' ? 'test-ok' : type === 'warn' ? 'test-warn' : 'test-fail';
+  const ico = type === 'ok' ? '✓' : type === 'warn' ? '⚠' : '✗';
+  el.className = 'test-result ' + cls;
+  el.textContent = ico + ' ' + msg;
+}
+
+function showInline(id, type, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const col = type === 'ok' ? '#22c55e' : type === 'warn' ? '#f59e0b' : '#f87171';
+  const ico = type === 'ok' ? '✓' : type === 'warn' ? '⚠' : '✗';
+  el.style.color = col;
+  el.textContent = ico + ' ' + msg;
+}
+
+function clearResult(id) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = '';
+}
+
+async function saveAndNext(step, fieldMap, required) {
+  const data = {};
+  for (const [envKey, elemId] of Object.entries(fieldMap)) {
+    const el = document.getElementById(elemId);
+    if (el && el.value.trim()) data[envKey] = el.value.trim();
+  }
+  if (required && !Object.keys(data).length) {
+    alert('Bitte mindestens einen Wert eingeben.'); return;
+  }
+  if (Object.keys(data).length) {
+    await fetch('/einstellungen/token-speichern', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)
+    });
+  }
+  goTo(step + 1);
+}
+
+async function savePlatformsAndNext() {
+  const selected = ['instagram','facebook','linkedin','twitter','tiktok']
+    .filter(p => document.getElementById('plat-' + p)?.checked);
+  const data = {};
+  selected.forEach(pid => {
+    const cfg = PLATFORM_CONFIGS[pid];
+    cfg.fields.forEach(f => {
+      const el = document.getElementById('s3-' + f.key);
+      if (el && el.value.trim()) data[f.key] = el.value.trim();
+    });
+  });
+  if (Object.keys(data).length) {
+    await fetch('/einstellungen/token-speichern', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)
+    });
+  }
+  goTo(4);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neuen Kunden einrichten — Sozibot</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #11111b; --surface: #1e1e2e; --surface2: #313244; --border: #45475a;
+      --accent: #cba6f7; --accent2: #b4befe; --text: #cdd6f4; --muted: #a6adc8;
+      --subdued: #6c7086; --green: #a6e3a1; --blue: #89b4fa; --peach: #fab387;
+      --red: #f38ba8; --yellow: #f9e2af;
+    }
+    body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text);
+           min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+           justify-content: flex-start; padding: 40px 16px 80px; -webkit-font-smoothing: antialiased; }
+
+    .wizard { width: 100%; max-width: 660px; }
+
+    /* Header */
+    .wiz-header { text-align: center; margin-bottom: 36px; }
+    .wiz-logo { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .wiz-logo svg { width: 40px; height: 40px; }
+    .wiz-logo-name { font-size: 24px; font-weight: 800; }
+    .wiz-logo-name span { color: var(--accent); }
+    .wiz-title { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+    .wiz-sub   { font-size: 14px; color: var(--muted); line-height: 1.6; max-width: 480px; margin: 0 auto; }
+
+    /* Steps indicator */
+    .steps-row { display: flex; align-items: center; justify-content: center; gap: 0; margin-bottom: 36px; }
+    .sdot { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--border);
+            background: var(--surface2); display: flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 700; color: var(--muted); transition: all .3s; flex-shrink: 0; }
+    .sdot.active { border-color: var(--accent); background: linear-gradient(135deg,var(--accent),var(--accent2));
+                   color: #11111b; box-shadow: 0 0 14px rgba(203,166,247,.4); }
+    .sdot.done   { border-color: var(--green); background: rgba(166,227,161,.15); color: var(--green); }
+    .sline { flex: 1; height: 2px; background: var(--border); max-width: 80px; transition: background .3s; }
+    .sline.done { background: var(--green); }
+
+    /* Cards */
+    .step-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+                 padding: 32px; display: none; animation: fadeIn .25s ease; }
+    .step-card.active { display: block; }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform:none; } }
+    .step-title { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .step-sub   { font-size: 13px; color: var(--muted); margin-bottom: 26px; line-height: 1.6; }
+
+    /* Fields */
+    .field { margin-bottom: 18px; }
+    .field label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase;
+                   letter-spacing: .05em; color: var(--muted); margin-bottom: 6px; }
+    .field input, .field textarea {
+      width: 100%; padding: 11px 14px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 13px; font-family: inherit;
+      transition: border-color .15s; resize: vertical;
+    }
+    .field input:focus, .field textarea:focus { outline: none; border-color: var(--blue); }
+    .field-hint { font-size: 11px; color: var(--subdued); margin-top: 5px; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media(max-width:500px){ .field-row { grid-template-columns: 1fr; } }
+
+    /* Tone / Platform cards */
+    .choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px,1fr)); gap: 10px; margin-bottom: 8px; }
+    .choice-card { background: var(--surface2); border: 2px solid var(--border); border-radius: 10px;
+                   padding: 14px 12px; cursor: pointer; text-align: center; transition: all .15s;
+                   user-select: none; }
+    .choice-card:hover { border-color: var(--muted); }
+    .choice-card.selected { border-color: var(--accent); background: rgba(203,166,247,.1); }
+    .choice-card.sel-green { border-color: var(--green); background: rgba(166,227,161,.08); }
+    .choice-card .ci { font-size: 24px; margin-bottom: 6px; }
+    .choice-card .cn { font-size: 13px; font-weight: 600; }
+    .choice-card .cd { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+    .choice-card input { display: none; }
+
+    /* Pillars */
+    .pillar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .pillar-row input { flex: 1; }
+    .pillar-add { background: none; border: 1px dashed var(--border); border-radius: 8px;
+                  color: var(--muted); font-size: 13px; padding: 10px; cursor: pointer;
+                  width: 100%; transition: border-color .15s; }
+    .pillar-add:hover { border-color: var(--accent); color: var(--accent); }
+    .pillar-del { background: none; border: none; color: var(--subdued); font-size: 18px;
+                  cursor: pointer; padding: 4px; line-height: 1; transition: color .15s; }
+    .pillar-del:hover { color: var(--red); }
+
+    /* Buttons */
+    .btn { padding: 11px 22px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px;
+           font-weight: 600; transition: all .15s; display: inline-flex; align-items: center; gap: 7px; }
+    .btn:hover:not(:disabled) { opacity: .88; transform: translateY(-1px); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+    .btn-primary { background: linear-gradient(135deg,var(--accent),var(--accent2)); color: #11111b;
+                   box-shadow: 0 2px 14px rgba(203,166,247,.3); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-row { display: flex; gap: 10px; justify-content: space-between; align-items: center; margin-top: 26px; }
+
+    /* Done */
+    .done-screen { text-align: center; padding: 16px 0; }
+    .done-screen .bigcheck { font-size: 72px; margin-bottom: 16px; }
+    .done-screen h2 { font-size: 24px; font-weight: 800; margin-bottom: 10px; }
+    .done-screen p  { font-size: 14px; color: var(--muted); line-height: 1.7; max-width: 420px; margin: 0 auto 28px; }
+    .done-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(0,0,0,.2);
+               border-top-color: #11111b; border-radius: 50%; animation: spin .6s linear infinite; }
+  </style>
+</head>
+<body>
+<div class="wizard">
+
+  <!-- Header -->
+  <div class="wiz-header">
+    <div class="wiz-logo">
+      <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="9" fill="#313244"/>
+        <path d="M8 15 L7 5 L15 13 Z"  fill="#cba6f7"/>
+        <path d="M28 15 L29 5 L21 13 Z" fill="#cba6f7"/>
+        <path d="M9 13.5 L8.5 7 L14 12 Z"  fill="#f38ba8" opacity=".7"/>
+        <path d="M27 13.5 L27.5 7 L22 12 Z" fill="#f38ba8" opacity=".7"/>
+        <circle cx="18" cy="22" r="11" fill="#45475a"/>
+        <circle cx="13.5" cy="21" r="3"   fill="#cdd6f4"/>
+        <circle cx="22.5" cy="21" r="3"   fill="#cdd6f4"/>
+        <circle cx="13.5" cy="21" r="1.5" fill="#1e1e2e"/>
+        <circle cx="22.5" cy="21" r="1.5" fill="#1e1e2e"/>
+        <circle cx="14.3" cy="20" r=".8"  fill="white"/>
+        <circle cx="23.3" cy="20" r=".8"  fill="white"/>
+        <ellipse cx="18" cy="24.5" rx="1.2" ry=".9" fill="#f38ba8"/>
+        <path d="M16 26 Q18 27.8 20 26" stroke="#a6adc8" stroke-width=".9" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div class="wiz-logo-name"><span>Sozi</span>bot</div>
+    </div>
+    <h1 class="wiz-title">Neuen Kunden einrichten</h1>
+    <p class="wiz-sub">In 4 Schritten ist der Bot für deine Marke fertig konfiguriert. Dauert ca. 3 Minuten.</p>
+  </div>
+
+  <!-- Steps indicator -->
+  <div class="steps-row">
+    <div class="sdot active" id="dot-1">1</div>
+    <div class="sline" id="line-1"></div>
+    <div class="sdot" id="dot-2">2</div>
+    <div class="sline" id="line-2"></div>
+    <div class="sdot" id="dot-3">3</div>
+    <div class="sline" id="line-3"></div>
+    <div class="sdot" id="dot-4">4</div>
+  </div>
+
+  <!-- Step 1: Markeninfo -->
+  <div class="step-card active" id="step-1">
+    <div class="step-title">🏢 Marken-Infos</div>
+    <div class="step-sub">Die Basis: Wer bist du, was machst du?</div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Firmenname *</label>
+        <input type="text" id="brand_name" placeholder="z.B. Musterfirma GmbH" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Branche *</label>
+        <input type="text" id="industry" placeholder="z.B. Non-Profit, E-Commerce...">
+      </div>
+    </div>
+    <div class="field">
+      <label>Mission / Was ihr macht</label>
+      <textarea id="mission" rows="2" placeholder="z.B. Wir verbinden Menschen mit sozialen Projekten..."></textarea>
+    </div>
+    <div class="field">
+      <label>Slogan (optional)</label>
+      <input type="text" id="slogan" placeholder="z.B. Gemeinsam mehr bewegen">
+    </div>
+    <div class="field">
+      <label>Zielgruppe</label>
+      <input type="text" id="target_audience" placeholder="z.B. Engagierte Berufstätige 25-45 Jahre">
+    </div>
+
+    <div class="btn-row">
+      <span style="font-size:13px;color:var(--subdued)">Schritt 1 von 4</span>
+      <button class="btn btn-primary" onclick="goStep(2)">Weiter →</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Tonalität -->
+  <div class="step-card" id="step-2">
+    <div class="step-title">🎙️ Tonalität & Stil</div>
+    <div class="step-sub">Wie soll sich eure Marke anfühlen? Mehrere Auswahlen möglich.</div>
+
+    <div class="choice-grid" id="tone-grid">
+      <label class="choice-card" onclick="toggleTone(this,'professionell')">
+        <div class="ci">💼</div>
+        <div class="cn">Professionell</div>
+        <div class="cd">Seriös, kompetent, sachlich</div>
+        <input type="checkbox" value="professionell">
+      </label>
+      <label class="choice-card" onclick="toggleTone(this,'warm')">
+        <div class="ci">🤝</div>
+        <div class="cn">Warm</div>
+        <div class="cd">Menschlich, nahbar, empathisch</div>
+        <input type="checkbox" value="warm">
+      </label>
+      <label class="choice-card" onclick="toggleTone(this,'inspirierend')">
+        <div class="ci">✨</div>
+        <div class="cn">Inspirierend</div>
+        <div class="cd">Motivierend, visionär, aufbauend</div>
+        <input type="checkbox" value="inspirierend">
+      </label>
+      <label class="choice-card" onclick="toggleTone(this,'direkt')">
+        <div class="ci">⚡</div>
+        <div class="cn">Direkt</div>
+        <div class="cd">Klar, ohne Umwege, auf den Punkt</div>
+        <input type="checkbox" value="direkt">
+      </label>
+      <label class="choice-card" onclick="toggleTone(this,'locker')">
+        <div class="ci">😄</div>
+        <div class="cn">Locker</div>
+        <div class="cd">Humorvoll, entspannt, zugänglich</div>
+        <input type="checkbox" value="locker">
+      </label>
+      <label class="choice-card" onclick="toggleTone(this,'mutig')">
+        <div class="ci">🔥</div>
+        <div class="cn">Mutig</div>
+        <div class="cd">Provokant, polarisierend, mutig</div>
+        <input type="checkbox" value="mutig">
+      </label>
+    </div>
+
+    <div class="field" style="margin-top:20px">
+      <label>Content-Themen (was postet ihr?)</label>
+      <div id="pillars-list">
+        <div class="pillar-row">
+          <input class="field-input" type="text" placeholder="z.B. Produkt-Updates" style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;">
+          <button class="pillar-del" onclick="removePillar(this)" title="Entfernen">×</button>
+        </div>
+      </div>
+      <button class="pillar-add" onclick="addPillar()">+ Thema hinzufügen</button>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goStep(1)">← Zurück</button>
+      <button class="btn btn-primary" onclick="goStep(3)">Weiter →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Plattformen -->
+  <div class="step-card" id="step-3">
+    <div class="step-title">📱 Plattformen</div>
+    <div class="step-sub">Wo ist euer Unternehmen aktiv? Wähle alle relevanten Kanäle aus.</div>
+
+    <div class="choice-grid">
+      <label class="choice-card" onclick="togglePlat(this,'instagram')">
+        <div class="ci">📸</div>
+        <div class="cn">Instagram</div>
+        <div class="cd">Visuell, Stories, Reels</div>
+        <input type="checkbox" value="instagram">
+      </label>
+      <label class="choice-card" onclick="togglePlat(this,'facebook')">
+        <div class="ci">👍</div>
+        <div class="cn">Facebook</div>
+        <div class="cd">Community, Pages</div>
+        <input type="checkbox" value="facebook">
+      </label>
+      <label class="choice-card" onclick="togglePlat(this,'linkedin')">
+        <div class="ci">💼</div>
+        <div class="cn">LinkedIn</div>
+        <div class="cd">B2B, Fachbeiträge</div>
+        <input type="checkbox" value="linkedin">
+      </label>
+      <label class="choice-card" onclick="togglePlat(this,'twitter')">
+        <div class="ci">🐦</div>
+        <div class="cn">X / Twitter</div>
+        <div class="cd">Kurz, schnell, viral</div>
+        <input type="checkbox" value="twitter">
+      </label>
+      <label class="choice-card" onclick="togglePlat(this,'tiktok')">
+        <div class="ci">🎵</div>
+        <div class="cn">TikTok</div>
+        <div class="cd">Video, Trends, Gen Z</div>
+        <input type="checkbox" value="tiktok">
+      </label>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goStep(2)">← Zurück</button>
+      <button class="btn btn-primary" id="btn-save" onclick="saveAll()">🚀 Bot einrichten</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Done -->
+  <div class="step-card" id="step-4">
+    <div class="done-screen">
+      <div class="bigcheck">🎉</div>
+      <h2>Bot ist eingerichtet!</h2>
+      <p id="done-summary">Dein Sozibot ist jetzt für <strong id="done-brand">deine Marke</strong> konfiguriert und bereit. Als nächstes: API-Zugänge eintragen.</p>
+      <div class="done-actions">
+        <a href="/einstellungen/setup" class="btn btn-primary">🔑 API-Zugänge eintragen →</a>
+        <a href="/" class="btn btn-secondary">Dashboard öffnen</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let _currentStep = 1;
+const TOTAL_STEPS = 4;
+
+function goStep(n) {
+  // Validation
+  if (n === 2) {
+    if (!document.getElementById('brand_name').value.trim()) {
+      pulse('brand_name'); return;
+    }
+    if (!document.getElementById('industry').value.trim()) {
+      pulse('industry'); return;
+    }
+  }
+  if (n === 4) return; // goStep(4) only via saveAll()
+
+  document.getElementById('step-' + _currentStep).classList.remove('active');
+  document.getElementById('step-' + n).classList.add('active');
+
+  // Update dots
+  for (let i = 1; i <= TOTAL_STEPS; i++) {
+    const dot  = document.getElementById('dot-' + i);
+    if (i < n)      { dot.className = 'sdot done'; dot.textContent = '✓'; }
+    else if (i === n) { dot.className = 'sdot active'; dot.textContent = i; }
+    else             { dot.className = 'sdot'; dot.textContent = i; }
+  }
+  // Update lines
+  for (let i = 1; i < TOTAL_STEPS; i++) {
+    const line = document.getElementById('line-' + i);
+    if (line) line.className = 'sline' + (i < n ? ' done' : '');
+  }
+  _currentStep = n;
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function pulse(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.borderColor = '#f38ba8';
+  el.focus();
+  setTimeout(() => el.style.borderColor = '', 1500);
+}
+
+function toggleTone(card, val) {
+  card.classList.toggle('selected');
+}
+
+function togglePlat(card, val) {
+  card.classList.toggle('sel-green');
+}
+
+function addPillar() {
+  const list = document.getElementById('pillars-list');
+  const row = document.createElement('div');
+  row.className = 'pillar-row';
+  row.innerHTML = `
+    <input type="text" placeholder="z.B. Mitarbeiter-Stories" style="flex:1;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;">
+    <button class="pillar-del" onclick="removePillar(this)" title="Entfernen">×</button>
+  `;
+  list.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+function removePillar(btn) {
+  const rows = document.querySelectorAll('.pillar-row');
+  if (rows.length <= 1) { btn.closest('.pillar-row').querySelector('input').value = ''; return; }
+  btn.closest('.pillar-row').remove();
+}
+
+async function saveAll() {
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Einrichten...';
+
+  // Collect data
+  const toneKws = [...document.querySelectorAll('#tone-grid .choice-card.selected input')]
+    .map(i => i.value);
+  const pillars = [...document.querySelectorAll('.pillar-row input')]
+    .map(i => i.value.trim()).filter(Boolean);
+  const platforms = [...document.querySelectorAll('.choice-card.sel-green input')]
+    .map(i => i.value);
+
+  const payload = {
+    brand_name:      document.getElementById('brand_name').value.trim(),
+    industry:        document.getElementById('industry').value.trim(),
+    mission:         document.getElementById('mission').value.trim(),
+    slogan:          document.getElementById('slogan').value.trim(),
+    target_audience: document.getElementById('target_audience').value.trim(),
+    tone_keywords:   toneKws,
+    content_pillars: pillars,
+    platforms:       platforms,
+  };
+
+  try {
+    const r = await fetch('/fragebogen/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const j = await r.json();
+    if (j.ok) {
+      document.getElementById('done-brand').textContent = payload.brand_name || 'deine Marke';
+      goStep(4);
+    } else {
+      btn.disabled = false;
+      btn.textContent = '🚀 Bot einrichten';
+      alert('Fehler: ' + (j.error || 'Unbekannt'));
+    }
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '🚀 Bot einrichten';
+    alert('Verbindungsfehler: ' + e.message);
+  }
+}
+</script>
+</body>
+</html>

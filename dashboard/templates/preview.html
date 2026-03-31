@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Content-Vorschau — {{ brand_name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #11111b;
+      color: #cdd6f4;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #181825 0%, #1e1e2e 100%);
+      border-bottom: 1px solid rgba(203,166,247,.1);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header h1 { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+    .header p  { font-size: 12px; color: #a6adc8; margin-top: 2px; }
+    .header-ts { margin-left: auto; font-size: 12px; color: #6c7086; }
+
+    .container { max-width: 820px; margin: 28px auto; padding: 0 20px; }
+    .section-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+    .section-title { font-size: 15px; font-weight: 700; color: #cdd6f4; letter-spacing: -.01em; }
+
+    .post-card {
+      background: #1e1e2e;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(203,166,247,.1);
+      transition: border-color .15s;
+    }
+    .post-card:hover { border-color: rgba(203,166,247,.2); }
+    .post-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+    .platform-badge { padding: 3px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; color: white; letter-spacing: .02em; }
+    .ig { background: #e1306c; } .fb { background: #1877f2; }
+    .li { background: #0a66c2; } .tw { background: #1da1f2; } .tt { background: #ff0050; }
+    .date { font-size: 12px; color: #6c7086; margin-left: auto; }
+
+    .post-topic { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #a6adc8; }
+    .post-content {
+      font-size: 13.5px;
+      line-height: 1.65;
+      color: #bac2de;
+      white-space: pre-wrap;
+      max-height: 140px;
+      overflow: hidden;
+      position: relative;
+    }
+    .post-content.expanded { max-height: none; }
+    .post-content::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 44px;
+      background: linear-gradient(transparent, #1e1e2e);
+    }
+    .post-content.expanded::after { display: none; }
+
+    .post-actions { display: flex; gap: 8px; margin-top: 16px; align-items: center; flex-wrap: wrap; }
+    .btn {
+      padding: 7px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'Inter', inherit;
+      transition: all .15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .btn:disabled { opacity: .45; cursor: default; transform: none; }
+    .btn-approve {
+      background: linear-gradient(135deg, #a6e3a1, #94e2d5);
+      color: #11111b;
+      box-shadow: 0 2px 10px rgba(166,227,161,.2);
+    }
+    .btn-approve:hover:not(:disabled) { box-shadow: 0 4px 16px rgba(166,227,161,.35); }
+    .btn-reject  { background: rgba(243,139,168,.1); color: #f38ba8; border: 1px solid rgba(243,139,168,.25); }
+    .btn-reject:hover:not(:disabled) { background: rgba(243,139,168,.2); }
+    .btn-expand  { background: rgba(203,166,247,.08); color: #cba6f7; border: 1px solid rgba(203,166,247,.2); font-size: 12px; padding: 5px 12px; }
+    .btn-bulk { background: linear-gradient(135deg, #cba6f7, #b4befe); color: #11111b; box-shadow: 0 2px 12px rgba(203,166,247,.3); padding: 8px 18px; }
+    .btn-bulk:hover { box-shadow: 0 4px 20px rgba(203,166,247,.45); }
+
+    .status-approved { color: #a6e3a1; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 4px; }
+    .status-rejected  { color: #f38ba8; font-weight: 600; font-size: 13px; }
+
+    .media-card { background: #1e1e2e; border-radius: 12px; border: 1px solid rgba(203,166,247,.1); overflow: hidden; display: flex; gap: 0; margin-bottom: 12px; }
+    .media-img { width: 130px; min-height: 130px; object-fit: cover; background: #313244; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .media-body { padding: 16px; flex: 1; }
+
+    .topic-chip { display: inline-block; background: rgba(203,166,247,.1); color: #cba6f7; padding: 2px 8px; border-radius: 6px; margin: 2px; font-size: 12px; border: 1px solid rgba(203,166,247,.2); }
+
+    .empty { text-align: center; padding: 48px 20px; color: #6c7086; font-size: 15px; }
+    .empty .bot-icon { font-size: 40px; margin-bottom: 12px; }
+
+    .footer {
+      text-align: center;
+      padding: 32px 0 48px;
+      font-size: 12px;
+      color: #45475a;
+      border-top: 1px solid rgba(203,166,247,.06);
+      margin-top: 32px;
+    }
+    .footer .sozibot { color: #6c7086; }
+    .footer .sozibot span { color: #cba6f7; }
+
+    ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #313244; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">
+    <!-- Nuna — flat icon style -->
+    <svg width="44" height="44" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="36" height="36" rx="9" fill="#313244"/>
+      <path d="M8 15 L7 5 L15 13 Z"  fill="#cba6f7"/>
+      <path d="M28 15 L29 5 L21 13 Z" fill="#cba6f7"/>
+      <path d="M9 13.5 L8.5 7 L14 12 Z"  fill="#f38ba8" opacity=".7"/>
+      <path d="M27 13.5 L27.5 7 L22 12 Z" fill="#f38ba8" opacity=".7"/>
+      <circle cx="18" cy="22" r="11" fill="#45475a"/>
+      <circle cx="13.5" cy="21" r="3"   fill="#cdd6f4"/>
+      <circle cx="22.5" cy="21" r="3"   fill="#cdd6f4"/>
+      <circle cx="13.5" cy="21" r="1.5" fill="#1e1e2e"/>
+      <circle cx="22.5" cy="21" r="1.5" fill="#1e1e2e"/>
+      <circle cx="14.3" cy="20" r=".8"  fill="white"/>
+      <circle cx="23.3" cy="20" r=".8"  fill="white"/>
+      <ellipse cx="9"  cy="24.5" rx="2.5" ry="1.5" fill="#f38ba8" opacity=".3"/>
+      <ellipse cx="27" cy="24.5" rx="2.5" ry="1.5" fill="#f38ba8" opacity=".3"/>
+      <ellipse cx="18" cy="24.5" rx="1.2" ry=".9" fill="#f38ba8"/>
+      <path d="M16 26 Q18 27.8 20 26" stroke="#a6adc8" stroke-width=".9" fill="none" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <h1><span style="color:#cba6f7">Sozi</span><span style="font-size:13px;font-weight:500;color:#6c7086">bot</span> Vorschau</h1>
+      <p>{{ brand_name }}{% if brand_industry %} · {{ brand_industry }}{% endif %}</p>
+    </div>
+  </div>
+  <div class="header-ts">Stand: {{ now.strftime('%d.%m.%Y %H:%M') }}</div>
+</div>
+
+<div class="container">
+
+  <!-- Geplante Posts -->
+  {% set pending_posts = posts | selectattr('status', 'ne', 'freigegeben') | selectattr('status', 'ne', 'abgelehnt') | list %}
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    <div class="section-title" style="margin:0">
+      📅 Geplante Posts (nächste 14 Tage) — {{ posts|length }} Posts
+    </div>
+    {% if pending_posts|length > 1 %}
+    <button class="btn btn-approve" id="bulk-approve-btn" onclick="approveAll()" style="font-size:13px">
+      ✓ Alle {{ pending_posts|length }} freigeben
+    </button>
+    {% endif %}
+  </div>
+
+  {% if not posts %}
+  <div class="empty">
+    <div class="bot-icon">🐱</div>
+    Keine Posts geplant. Sozibot generiert automatisch neuen Content.
+  </div>
+  {% endif %}
+
+  {% set p_class = {'instagram':'ig','facebook':'fb','linkedin':'li','twitter':'tw','tiktok':'tt'} %}
+  {% for post in posts %}
+  <div class="post-card" id="post-{{ post.id }}">
+    <div class="post-meta">
+      <span class="platform-badge {{ p_class.get(post.platform,'ig') }}">{{ post.platform|upper }}</span>
+      <span class="topic-chip">{{ post.get('topic','—')[:60] }}</span>
+      <span class="date">{{ post.get('scheduled_time','')[:16]|replace('T',' ') }}</span>
+    </div>
+
+    {% if post.get('content') %}
+    <div class="post-content" id="content-{{ post.id }}">{{ post.content }}</div>
+    {% if post.content|length > 200 %}
+    <button class="btn btn-expand" id="expand-btn-{{ post.id }}" onclick="toggleExpand('{{ post.id }}')" style="margin-top:6px">Mehr anzeigen</button>
+    {% endif %}
+    {% else %}
+    <div style="color:#94a3b8;font-size:13px;font-style:italic">
+      Content wird automatisch generiert bevor der Post veröffentlicht wird.
+    </div>
+    {% endif %}
+
+    <div class="post-actions">
+      {% set st = post.get('status','geplant') %}
+      {% if st == 'freigegeben' %}
+        <span class="status-approved">✓ Freigegeben</span>
+      {% elif st == 'abgelehnt' %}
+        <span class="status-rejected">✗ Abgelehnt</span>
+      {% else %}
+        <button class="btn btn-approve" onclick="approvePost('{{ post.id }}',this)">✓ Freigeben</button>
+        <button class="btn btn-reject"  onclick="rejectPost('{{ post.id }}',this)">✗ Ablehnen</button>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <!-- Media-Queue -->
+  {% if media_queue %}
+  <div class="section-title" style="margin-top:32px">🖼️ Vorbereitete Bilder zur Freigabe</div>
+  {% for m in media_queue %}
+  <div class="media-card" id="media-{{ m.media_id }}">
+    {% if m.get('processed_path') %}
+    <img class="media-img" src="/media/processed/{{ m.media_id.rsplit('.',1)[0] }}.jpg"
+         onerror="this.src='/media/file/{{ m.media_id }}'">
+    {% else %}
+    <div class="media-img" style="display:flex;align-items:center;justify-content:center;font-size:32px">🖼️</div>
+    {% endif %}
+    <div class="media-body">
+      <div style="font-weight:600;margin-bottom:6px">{{ m.media_id }}</div>
+      <div style="font-size:13px;color:#a6adc8;margin-bottom:4px">
+        Plattform: <b style="color:#cba6f7">{{ m.platform|upper }}</b> ·
+        Quelle: {{ 'KI-generiert (DALL-E)' if m.source=='dall_e_generated' else 'Original + Branding' }}
+      </div>
+      {% if m.get('ai_analysis') %}
+      <div style="font-size:13px;color:#a6adc8;margin-bottom:10px">
+        Brand-Score: {{ m.ai_analysis.get('brand_fit_score','—') }}/10 ·
+        {{ m.ai_analysis.get('mood','') }}
+      </div>
+      {% endif %}
+      {% if m.get('suggested_topics') %}
+      <div style="font-size:13px;margin-bottom:10px">
+        <b>Vorgeschlagene Topics:</b>
+        {% for t in m.suggested_topics[:2] %}
+        <span class="topic-chip">{{ t }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if m.queue_status == 'approved' %}
+        <span class="status-approved">✓ Freigegeben — wird automatisch gepostet</span>
+      {% else %}
+        <button class="btn btn-approve" onclick="approveMedia('{{ m.media_id }}',this)">✓ Freigeben & Posten</button>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+</div>
+
+<div class="footer">
+  <div class="sozibot">Powered by <span>Sozibot</span> · {{ brand_name }}</div>
+  <div style="margin-top:6px;color:#313244">Content-Vorschau · Genehmigen oder ablehnen Sie Ihre geplanten Beiträge</div>
+</div>
+
+<script>
+function toggleExpand(id) {
+  const el = document.getElementById('content-' + id);
+  const btn = document.getElementById('expand-btn-' + id);
+  el.classList.toggle('expanded');
+  if (btn) btn.textContent = el.classList.contains('expanded') ? 'Weniger anzeigen' : 'Mehr anzeigen';
+}
+
+async function approvePost(id, btn) {
+  btn.disabled = true; btn.textContent = '⏳ Wird gespeichert...';
+  const r = await fetch('/kunden-vorschau/approve/' + id, { method:'POST' });
+  const j = await r.json();
+  if (j.ok) {
+    btn.parentElement.innerHTML = '<span class="status-approved">✓ Freigegeben</span>';
+  } else {
+    btn.disabled = false; btn.textContent = '✓ Freigeben';
+  }
+}
+
+async function rejectPost(id, btn) {
+  btn.disabled = true; btn.textContent = '⏳...';
+  const r = await fetch('/kunden-vorschau/reject/' + id, { method:'POST' });
+  const j = await r.json();
+  if (j.ok) {
+    btn.parentElement.innerHTML = '<span class="status-rejected">✗ Abgelehnt</span>';
+  } else {
+    btn.disabled = false; btn.textContent = '✗ Ablehnen';
+  }
+}
+
+async function approveAll() {
+  const btn = document.getElementById('bulk-approve-btn');
+  const approveBtns = document.querySelectorAll('.btn-approve[onclick^="approvePost"]');
+  if (!approveBtns.length) return;
+  btn.disabled = true; btn.textContent = '⏳ Werden freigegeben...';
+  let done = 0;
+  for (const ab of approveBtns) {
+    const match = ab.getAttribute('onclick').match(/approvePost\('([^']+)'/);
+    if (!match) continue;
+    const id = match[1];
+    try {
+      const r = await fetch('/kunden-vorschau/approve/' + id, { method:'POST' });
+      const j = await r.json();
+      if (j.ok) { ab.parentElement.innerHTML = '<span class="status-approved">✓ Freigegeben</span>'; done++; }
+    } catch(e) {}
+  }
+  btn.textContent = `✓ ${done} Posts freigegeben`;
+  btn.style.background = '#16a34a';
+}
+
+async function approveMedia(id, btn) {
+  btn.disabled = true; btn.textContent = '⏳ Wird freigegeben...';
+  const r = await fetch('/kunden-vorschau/approve-media/' + id, { method:'POST' });
+  const j = await r.json();
+  if (j.ok) {
+    btn.textContent = '✓ Freigegeben — wird automatisch gepostet';
+    btn.style.background = '#22c55e';
+  } else {
+    btn.disabled = false; btn.textContent = '✓ Freigeben & Posten';
+  }
+}
+</script>
+</body>
+</html>

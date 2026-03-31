@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+  <div class="page-title" style="margin:0">Analytics</div>
+  <div style="display:flex;gap:8px">
+    {% for d in [7,30,90] %}
+    <a href="/analytics/?days={{ d }}" class="btn {% if days==d %}btn-primary{% else %}btn-secondary{% endif %}">{{ d }} Tage</a>
+    {% endfor %}
+  </div>
+</div>
+
+{% set all_empty = summaries.values() | selectattr('message') | list | length == summaries | length %}
+{% if all_empty %}
+<div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:10px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
+  <span style="font-size:20px">💡</span>
+  <div>
+    <div style="font-size:13px;font-weight:600">Noch keine Daten vorhanden</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:2px">
+      Erstelle und veröffentliche Posts, damit hier Statistiken erscheinen.
+      <a href="/vorschau/woche" style="color:var(--blue)">Woche freigeben →</a> ·
+      <a href="/composer/" style="color:var(--blue)">Composer →</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Chart -->
+<div class="card" style="margin-bottom:20px">
+  <div class="card-title">Posts pro Plattform (letzte {{ days }} Tage)</div>
+  <canvas id="postsChart" height="80"></canvas>
+</div>
+
+<!-- Platform Summaries -->
+<div class="grid grid-5">
+  {% set icons = {'instagram':'📸','facebook':'👍','linkedin':'💼','twitter':'🐦','tiktok':'🎵'} %}
+  {% for platform, s in summaries.items() %}
+  <div class="card">
+    <div class="card-title">{{ icons[platform] }} {{ platform|capitalize }}</div>
+    {% if s.get('message') %}
+      <div style="text-align:center;padding:16px 0;color:var(--muted)">
+        <div style="font-size:22px;margin-bottom:6px">📭</div>
+        <div style="font-size:12px;margin-bottom:8px">Noch keine Posts veröffentlicht</div>
+        <a href="/vorschau/woche" style="font-size:11px;color:var(--blue);text-decoration:none">→ Woche freigeben</a>
+      </div>
+    {% else %}
+    <table style="width:100%;font-size:13px;border-collapse:collapse">
+      {% for key, label in [('posts_veroeffentlicht','Posts'),('gesamte_likes','Likes'),('gesamte_kommentare','Kommentare'),('durchschnittliche_engagement_rate','Engagement')] %}
+      <tr>
+        <td style="color:var(--muted);padding:5px 0;border-bottom:1px solid var(--border)">{{ label }}</td>
+        <td style="text-align:right;font-weight:600;padding:5px 0;border-bottom:1px solid var(--border)">
+          {% if key == 'durchschnittliche_engagement_rate' %}{{ "%.1f"|format(s.get(key, 0)) }}%
+          {% else %}{{ s.get(key, 0) }}{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% if s.get('bester_post') %}
+    <div style="margin-top:10px;padding:8px;background:var(--surface2);border-radius:6px;font-size:12px">
+      <div style="color:var(--muted);margin-bottom:2px">Bester Post</div>
+      <div style="font-weight:600">{{ s.bester_post.thema[:40] }}</div>
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const chartData = {{ chart_data|safe }};
+const ctx = document.getElementById('postsChart').getContext('2d');
+new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: Object.keys(chartData).map(p => p.charAt(0).toUpperCase() + p.slice(1)),
+    datasets: [{
+      label: 'Posts',
+      data: Object.values(chartData),
+      backgroundColor: ['#e1306c','#1877f2','#0a66c2','#1da1f2','#ff0050'],
+      borderRadius: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: '#2e3347' }, ticks: { color: '#8892a4' } },
+      y: { grid: { color: '#2e3347' }, ticks: { color: '#8892a4' }, beginAtZero: true }
+    }
+  }
+});
+</script>
+{% endblock %}

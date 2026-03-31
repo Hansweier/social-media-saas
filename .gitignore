@@ -1,0 +1,19 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.claude/
+
+# Kundendaten — nicht ins Repository
+client/brand_knowledge.json
+client/bot_settings.json
+client/content_calendar.json
+client/conversations.json
+client/notifications.json
+client/reports/
+client/media/
+client/brand_pdfs/
+client/submissions/
+bot.log

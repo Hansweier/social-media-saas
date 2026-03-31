@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}Media Library{% endblock %}
+
+{% block extra_head %}
+<style>
+.upload-zone {
+  border: 2px dashed var(--border); border-radius: 12px; padding: 40px 20px;
+  text-align: center; cursor: pointer; transition: border-color .2s;
+  background: var(--surface2);
+}
+.upload-zone.drag { border-color: var(--accent); background: rgba(227,0,11,.06); }
+.upload-zone input { display:none; }
+.progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 10px; overflow:hidden; display:none; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .3s; width: 0%; }
+
+.media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.media-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.media-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--surface2); display: block; }
+.media-thumb-placeholder { width:100%; aspect-ratio:1; background:var(--surface2); display:flex; align-items:center; justify-content:center; font-size:40px; }
+.media-body { padding: 12px; }
+.media-name { font-size: 12px; color: var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom: 6px; }
+.media-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+.analysis-panel { display:none; margin-top:10px; padding:10px; background:var(--surface2); border-radius:8px; font-size:12px; }
+.analysis-panel.open { display:block; }
+.analysis-panel table { width:100%; border-collapse:collapse; }
+.analysis-panel td { padding:2px 0; vertical-align:top; }
+.analysis-panel td:first-child { color:var(--muted); width:50%; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-title">Media Library</div>
+
+<!-- Upload Zone -->
+<div class="card" style="margin-bottom:24px">
+  <div class="card-title">Material hochladen</div>
+  <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <div style="font-size:32px;margin-bottom:10px">☁️</div>
+    <div style="font-weight:600;margin-bottom:4px">Bilder oder Videos hierher ziehen</div>
+    <div style="color:var(--muted);font-size:13px">oder klicken zum Auswählen — JPG, PNG, MP4, MOV</div>
+    <input type="file" id="fileInput" multiple accept=".jpg,.jpeg,.png,.mp4,.mov,.webp">
+  </div>
+  <div class="progress-bar" id="progressBar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+  <div id="uploadStatus" style="font-size:13px;color:var(--muted);margin-top:8px"></div>
+</div>
+
+<!-- Media Grid -->
+<div class="card">
+  <div class="card-title">Hochgeladene Dateien ({{ media_items|length }})</div>
+
+  {% if not media_items %}
+  <div class="empty-state">
+    <div class="icon">🖼️</div>
+    <h3>Noch keine Medien hochgeladen</h3>
+    <p>Lade Bilder oder Videos hoch. Claude analysiert sie automatisch und bereitet sie für deine Posts vor — mit Branding-Overlay oder KI-generiertem Ersatz.</p>
+    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Datei auswählen</button>
+  </div>
+  {% else %}
+  <div class="media-grid" style="margin-top:12px" id="mediaGrid">
+    {% for item in media_items %}
+    {% set meta = item.meta %}
+    {% set analysis = meta.get('ai_analysis') %}
+    <div class="media-card" id="card-{{ item.filename }}">
+      {% if item.filename.endswith(('.mp4','.mov')) %}
+        <div class="media-thumb-placeholder">🎬</div>
+      {% else %}
+        <img class="media-thumb" src="/media/file/{{ item.filename }}" alt="{{ item.filename }}" loading="lazy">
+      {% endif %}
+
+      <div class="media-body">
+        <div class="media-name" title="{{ item.filename }}">{{ item.filename }}</div>
+
+        <!-- Status -->
+        {% set st = meta.get('status', 'uploaded') %}
+        <span class="badge {% if st=='processed' %}green{% elif st=='analyzing' %}blue{% elif st=='fehler' %}red{% else %}grey{% endif %}">
+          {{ st|capitalize }}
+        </span>
+        {% if meta.get('queue_status') == 'ready' %}
+          <span class="badge purple" style="margin-left:4px">Queue</span>
+        {% endif %}
+
+        <!-- KI-Analyse -->
+        {% if analysis %}
+        <div class="analysis-panel open">
+          <table>
+            <tr><td>Entscheidung</td><td><b>{{ analysis.decision }}</b></td></tr>
+            <tr><td>Brand-Score</td><td>{{ analysis.brand_fit_score }}/10</td></tr>
+            <tr><td>Stimmung</td><td>{{ analysis.mood }}</td></tr>
+            <tr><td>Beschreibung</td><td>{{ analysis.description[:80] }}...</td></tr>
+          </table>
+          {% if meta.get('processed_path') %}
+          <div style="margin-top:8px">
+            <div style="color:var(--muted);margin-bottom:4px">Ergebnis:</div>
+            <img src="/media/processed/{{ item.filename|replace('.jpg','')|replace('.png','') }}.jpg"
+                 style="width:100%;border-radius:6px" onerror="this.style.display='none'">
+          </div>
+          {% endif %}
+          {% if analysis.get('suggested_caption_topics') %}
+          <div style="margin-top:8px;color:var(--muted)">Topics:</div>
+          {% for t in analysis.suggested_caption_topics %}
+          <div style="margin-top:3px">• {{ t }}</div>
+          {% endfor %}
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="media-actions">
+          {% if st in ('uploaded', 'fehler') %}
+          <button class="btn btn-primary btn-sm" onclick="analyzeMedia('{{ item.filename }}', this)" style="flex:1">
+            🤖 KI-Analyse
+          </button>
+          {% endif %}
+
+          {% if meta.get('queue_status') == 'ready' %}
+          <a href="/composer/" class="btn btn-secondary btn-sm" style="flex:1;text-decoration:none;text-align:center">
+            ✏️ Composer
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ── Drag & Drop ───────────────────────────────────────────────────────────────
+const zone = document.getElementById('dropZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('drag');
+  uploadFiles(e.dataTransfer.files);
+});
+document.getElementById('fileInput').addEventListener('change', e => uploadFiles(e.target.files));
+
+async function uploadFiles(files) {
+  const bar = document.getElementById('progressBar');
+  const fill = document.getElementById('progressFill');
+  const status = document.getElementById('uploadStatus');
+  bar.style.display = 'block';
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    fill.style.width = ((i / files.length) * 100) + '%';
+    status.textContent = 'Lade hoch: ' + file.name;
+
+    const fd = new FormData();
+    fd.append('file', file);
+    const r = await fetch('/media/upload', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!j.ok) { status.textContent = 'Fehler: ' + j.error; return; }
+  }
+
+  fill.style.width = '100%';
+  status.textContent = files.length + ' Datei(en) hochgeladen!';
+  setTimeout(() => location.reload(), 800);
+}
+
+// ── Platform Picker (replaces ugly prompt()) ────────────────────────────────
+function choosePlatform() {
+  return new Promise(resolve => {
+    document.getElementById('confirm-title').textContent = 'Plattform wählen';
+    document.getElementById('confirm-msg').innerHTML = `
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Für welche Plattform soll das Bild optimiert werden?</div>
+      <select id="_plat_sel" style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+        <option value="instagram">📸 Instagram (1:1 · 1080px)</option>
+        <option value="facebook">👍 Facebook (1.91:1)</option>
+        <option value="linkedin">💼 LinkedIn (1.91:1)</option>
+        <option value="twitter">🐦 Twitter / X (16:9)</option>
+        <option value="tiktok">🎵 TikTok (9:16 Hochformat)</option>
+      </select>`;
+    document.getElementById('confirm-ok').textContent = '🤖 Analyse starten';
+    document.getElementById('confirm-modal').classList.add('open');
+    const ok = document.getElementById('confirm-ok');
+    const cancel = document.getElementById('confirm-cancel');
+    function cleanup(val) {
+      document.getElementById('confirm-modal').classList.remove('open');
+      ok.textContent = 'Bestätigen';
+      ok.onclick = null; cancel.onclick = null;
+      resolve(val);
+    }
+    ok.onclick     = () => cleanup(document.getElementById('_plat_sel').value);
+    cancel.onclick = () => cleanup(null);
+  });
+}
+
+// ── KI-Analyse ────────────────────────────────────────────────────────────────
+async function analyzeMedia(filename, btn) {
+  const platform = await choosePlatform();
+  if (!platform) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Analysiere...';
+
+  const r = await apiPost('/media/analyze/' + filename, { platform });
+  if (!r.ok) {
+    btn.disabled = false; btn.textContent = '🤖 KI-Analyse';
+    toast('Fehler beim Starten: ' + (r.error || ''), 'error');
+    return;
+  }
+
+  // Poll /media/status/<filename> every 3s with timeout
+  let elapsed = 0;
+  const poll = setInterval(async () => {
+    elapsed += 3;
+    try {
+      const s = await fetch('/media/status/' + filename).then(res => res.json());
+      if (s.status === 'processed') {
+        clearInterval(poll);
+        toast('✓ Analyse abgeschlossen!', 'success', 4000);
+        setTimeout(() => location.reload(), 800);
+      } else if (s.status === 'fehler') {
+        clearInterval(poll);
+        btn.disabled = false; btn.textContent = '🔄 Erneut versuchen';
+        toast('Analyse fehlgeschlagen: ' + (s.error || 'Unbekannter Fehler'), 'error', 8000);
+      } else if (elapsed > 20) {
+        btn.innerHTML = '<span class="spinner"></span> Läuft… (kann 1 Min. dauern)';
+      }
+    } catch(e) {}
+    if (elapsed >= 120) {
+      clearInterval(poll);
+      btn.disabled = false; btn.textContent = '🔄 Erneut versuchen';
+      toast('Analyse hat zu lange gedauert — bitte erneut versuchen', 'error', 8000);
+    }
+  }, 3000);
+}
+</script>
+{% endblock %}

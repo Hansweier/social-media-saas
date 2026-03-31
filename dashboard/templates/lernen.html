@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}KI-Lernprofil{% endblock %}
+
+{% block extra_head %}
+<style>
+.learn-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; margin-bottom:24px; }
+.learn-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px; }
+.learn-card-title { font-weight:700; font-size:14px; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
+.learn-card-sub { font-size:12px; color:var(--muted); margin-bottom:14px; }
+.learn-stat-row { display:flex; gap:12px; margin-bottom:14px; }
+.learn-stat { text-align:center; flex:1; background:var(--surface2); border-radius:8px; padding:10px 6px; }
+.learn-stat .num { font-size:22px; font-weight:700; }
+.learn-stat .lbl { font-size:10px; color:var(--muted); }
+.tag-list { display:flex; flex-wrap:wrap; gap:6px; }
+.tag { display:flex; align-items:center; gap:5px; padding:4px 10px; border-radius:14px; font-size:11px; font-weight:500; }
+.tag.green { background:rgba(166,227,161,.12); border:1px solid rgba(166,227,161,.3); color:#a6e3a1; }
+.tag.red   { background:rgba(243,139,168,.12); border:1px solid rgba(243,139,168,.3); color:#f38ba8; }
+.tag.grey  { background:var(--surface2); border:1px solid var(--border); color:var(--muted); }
+.tag-remove { cursor:pointer; opacity:.5; transition:opacity .15s; font-size:10px; line-height:1; }
+.tag-remove:hover { opacity:1; }
+.section-label { font-size:11px; font-weight:700; text-transform:uppercase; color:var(--subdued); margin-bottom:8px; letter-spacing:.05em; }
+.empty-hint { font-size:12px; color:var(--subdued); font-style:italic; }
+.global-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+.add-tag-row { display:flex; gap:8px; margin-top:10px; }
+.add-tag-row input { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; padding:7px 10px; }
+.add-tag-row input:focus { outline:none; border-color:var(--accent); }
+.approval-bar { height:6px; background:var(--surface2); border-radius:3px; overflow:hidden; margin-top:6px; }
+.approval-fill { height:100%; border-radius:3px; background:linear-gradient(90deg,#22c55e,#a6e3a1); transition:width .4s ease; }
+.reset-btn { font-size:11px; color:var(--subdued); background:none; border:1px solid var(--border); border-radius:6px; padding:3px 9px; cursor:pointer; float:right; transition:all .15s; }
+.reset-btn:hover { border-color:#f38ba8; color:#f38ba8; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:12px">
+  <div>
+    <div class="page-title">KI-Lernprofil</div>
+    <div class="page-sub">Was Sozibot aus deinen Freigaben und Ablehnungen gelernt hat</div>
+  </div>
+  <button class="btn btn-secondary" onclick="resetAll()" style="font-size:12px">🗑 Komplett zurücksetzen</button>
+</div>
+
+<!-- Global Preferences -->
+<div class="global-card">
+  <div style="font-weight:700;font-size:14px;margin-bottom:12px">🌐 Globale Präferenzen <span style="font-size:11px;font-weight:400;color:var(--muted)">(gelten für alle Plattformen)</span></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div>
+      <div class="section-label" style="color:#a6e3a1">Immer bevorzugen</div>
+      <div class="tag-list" id="global-prefer-tags">
+        {% for item in profile.global.always_prefer %}
+        <span class="tag green">{{ item }} <span class="tag-remove" onclick="removeGlobal('always_prefer','{{ item }}')">✕</span></span>
+        {% else %}
+        <span class="empty-hint">Noch keine Einträge</span>
+        {% endfor %}
+      </div>
+      <div class="add-tag-row">
+        <input id="add-prefer-input" placeholder="z.B. Authentisch, persönlich..." onkeydown="if(event.key==='Enter')addGlobal('always_prefer')">
+        <button class="btn btn-secondary btn-sm" onclick="addGlobal('always_prefer')">+ Hinzufügen</button>
+      </div>
+    </div>
+    <div>
+      <div class="section-label" style="color:#f38ba8">Immer vermeiden</div>
+      <div class="tag-list" id="global-avoid-tags">
+        {% for item in profile.global.always_avoid %}
+        <span class="tag red">{{ item }} <span class="tag-remove" onclick="removeGlobal('always_avoid','{{ item }}')">✕</span></span>
+        {% else %}
+        <span class="empty-hint">Noch keine Einträge</span>
+        {% endfor %}
+      </div>
+      <div class="add-tag-row">
+        <input id="add-avoid-input" placeholder="z.B. Zu werblich, Klischees..." onkeydown="if(event.key==='Enter')addGlobal('always_avoid')">
+        <button class="btn btn-secondary btn-sm" onclick="addGlobal('always_avoid')">+ Hinzufügen</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Per-Platform Cards -->
+{% if summary %}
+<div class="learn-grid">
+  {% set icons = {'instagram':'📸','facebook':'👍','linkedin':'💼','twitter':'𝕏','tiktok':'🎵'} %}
+  {% set colors = {'instagram':'#f59e0b','facebook':'#3b82f6','linkedin':'#0ea5e9','twitter':'var(--text)','tiktok':'#ec4899'} %}
+  {% for platform, data in summary.items() %}
+  {% set plat_data = profile.per_platform.get(platform, {}) %}
+  {% set total = data.approved + data.rejected %}
+  {% set rate = ((data.approved / total) * 100) | int if total > 0 else 0 %}
+  <div class="learn-card">
+    <div class="learn-card-title">
+      <span>{{ icons.get(platform,'🔵') }}</span>
+      <span style="color:{{ colors.get(platform,'var(--text)') }}">{{ platform|capitalize }}</span>
+      <button class="reset-btn" onclick="resetPlatform('{{ platform }}')">Reset</button>
+    </div>
+    <div class="learn-card-sub">{{ total }} Interaktionen · {{ rate }}% Freigabe-Rate</div>
+
+    <div class="learn-stat-row">
+      <div class="learn-stat">
+        <div class="num" style="color:#a6e3a1">{{ data.approved }}</div>
+        <div class="lbl">Freigegeben</div>
+      </div>
+      <div class="learn-stat">
+        <div class="num" style="color:#f38ba8">{{ data.rejected }}</div>
+        <div class="lbl">Abgelehnt</div>
+      </div>
+      <div class="learn-stat">
+        <div class="num" style="color:#a78bfa">{{ rate }}%</div>
+        <div class="lbl">Akzeptanzrate</div>
+      </div>
+    </div>
+    <div class="approval-bar">
+      <div class="approval-fill" style="width:{{ rate }}%"></div>
+    </div>
+
+    <div style="margin-top:14px">
+      {% if data.prefer_topics %}
+      <div class="section-label" style="color:#a6e3a1;margin-top:10px">Bevorzugte Themen</div>
+      <div class="tag-list">
+        {% for t in plat_data.get('approved_topics', [])[-8:] %}
+        <span class="tag green">{{ t[:30] }}{% if t|length > 30 %}…{% endif %} <span class="tag-remove" onclick="removeTopic('{{ platform }}','approved_topics','{{ t|replace("'","\\'") }}')">✕</span></span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if data.avoid_topics %}
+      <div class="section-label" style="color:#f38ba8;margin-top:10px">Vermiedene Themen</div>
+      <div class="tag-list">
+        {% for t in plat_data.get('rejected_topics', [])[-8:] %}
+        <span class="tag red">{{ t[:30] }}{% if t|length > 30 %}…{% endif %} <span class="tag-remove" onclick="removeTopic('{{ platform }}','rejected_topics','{{ t|replace("'","\\'") }}')">✕</span></span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% set rej_styles = plat_data.get('rejected_styles', []) %}
+      {% if rej_styles %}
+      <div class="section-label" style="color:#fab387;margin-top:10px">Stil-Hinweise</div>
+      <div class="tag-list">
+        {% for s in rej_styles[-5:] %}
+        <span class="tag grey">{{ s[:40] }}{% if s|length > 40 %}…{% endif %}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div style="text-align:center;padding:60px 20px;color:var(--muted)">
+  <div style="font-size:36px;margin-bottom:12px">🧠</div>
+  <div style="font-size:15px;font-weight:600;margin-bottom:8px">Noch nichts gelernt</div>
+  <div style="font-size:13px">Freigebe oder lehne Posts ab, damit Sozibot anfängt zu lernen.</div>
+  <a href="/vorschau/woche" class="btn btn-primary" style="margin-top:16px;display:inline-block">→ Zur Wochenplanung</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function addGlobal(key) {
+  const inputId = key === 'always_prefer' ? 'add-prefer-input' : 'add-avoid-input';
+  const input   = document.getElementById(inputId);
+  const value   = input.value.trim();
+  if (!value) return;
+  const r = await apiPost('/lernen/global', {key, action:'add', value});
+  if (r.ok) { input.value = ''; location.reload(); }
+}
+
+async function removeGlobal(key, value) {
+  const r = await apiPost('/lernen/global', {key, action:'remove', value});
+  if (r.ok) location.reload();
+}
+
+async function removeTopic(platform, list, value) {
+  const r = await apiPost('/lernen/topic', {platform, list, action:'remove', value});
+  if (r.ok) location.reload();
+}
+
+async function resetPlatform(platform) {
+  if (!confirm(`Lernprofil für ${platform} zurücksetzen?`)) return;
+  const r = await apiPost('/lernen/reset', {platform});
+  if (r.ok) location.reload();
+}
+
+async function resetAll() {
+  if (!confirm('Gesamtes Lernprofil zurücksetzen? Alle gelernten Präferenzen gehen verloren.')) return;
+  const r = await apiPost('/lernen/reset', {platform:'all'});
+  if (r.ok) location.reload();
+}
+</script>
+{% endblock %}

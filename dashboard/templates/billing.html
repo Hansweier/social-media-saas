@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}Billing & Plan{% endblock %}
+
+{% block content %}
+<style>
+  .billing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+  @media(max-width:760px){ .billing-grid { grid-template-columns:1fr; } }
+
+  .plan-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:24px; }
+  .plan-card.active-plan { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), 0 4px 24px rgba(203,166,247,.12); }
+
+  .plan-badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; letter-spacing:.04em; margin-bottom:10px; }
+  .badge-trial   { background:rgba(249,226,175,.15); color:var(--yellow); border:1px solid rgba(249,226,175,.3); }
+  .badge-starter { background:rgba(137,180,250,.15); color:var(--blue);   border:1px solid rgba(137,180,250,.3); }
+  .badge-pro     { background:rgba(203,166,247,.15); color:var(--accent); border:1px solid rgba(203,166,247,.3); }
+  .badge-agency  { background:rgba(166,227,161,.15); color:var(--green);  border:1px solid rgba(166,227,161,.3); }
+
+  .plan-name  { font-size:22px; font-weight:800; margin-bottom:4px; }
+  .plan-price { font-size:14px; color:var(--muted); margin-bottom:20px; }
+  .plan-stat  { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); font-size:14px; }
+  .plan-stat:last-child { border:none; }
+  .stat-val   { font-weight:600; }
+
+  .usage-bar-wrap { margin:16px 0 8px; }
+  .usage-bar { height:8px; background:var(--surface2); border-radius:4px; overflow:hidden; }
+  .usage-fill { height:100%; border-radius:4px; background:var(--accent); transition:width .4s; }
+  .usage-fill.warning { background:var(--yellow); }
+  .usage-fill.danger  { background:#f38ba8; }
+
+  .plans-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; }
+  .plan-tier  { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; text-align:center; }
+  .plan-tier.current { border-color:var(--accent); }
+  .tier-name  { font-size:16px; font-weight:700; margin-bottom:4px; }
+  .tier-price { font-size:13px; color:var(--muted); margin-bottom:16px; }
+  .tier-features { text-align:left; font-size:13px; color:var(--muted); margin-bottom:18px; }
+  .tier-features li { margin-bottom:6px; list-style:none; padding-left:0; }
+  .tier-features li::before { content:"✓ "; color:var(--green); font-weight:700; }
+  .tier-features li.no::before { content:"✗ "; color:var(--subdued); }
+
+  .license-box { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; }
+  .license-input { display:flex; gap:10px; margin-top:12px; }
+  .license-input input { flex:1; background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:10px 14px; font-size:14px; font-family:monospace; }
+  .license-input input:focus { outline:none; border-color:var(--accent); }
+</style>
+
+<div class="page-header">
+  <div class="page-title">Billing & Plan</div>
+  <div class="page-sub">Dein aktueller Plan, Verbrauch und Upgrade-Optionen</div>
+</div>
+
+{% with msgs = get_flashed_messages(with_categories=true) %}{% endwith %}
+
+{% set q = request.args %}
+{% if q.get('success') %}
+<div class="alert" style="background:rgba(166,227,161,.12);border:1px solid var(--green);border-radius:10px;padding:14px 18px;margin-bottom:20px;color:var(--green)">
+  ✓ Zahlung erfolgreich — dein Plan wurde aktiviert!
+</div>
+{% elif q.get('canceled') %}
+<div class="alert" style="background:rgba(249,226,175,.1);border:1px solid var(--yellow);border-radius:10px;padding:14px 18px;margin-bottom:20px;color:var(--yellow)">
+  Checkout abgebrochen. Du kannst jederzeit upgraden.
+</div>
+{% endif %}
+
+<div class="billing-grid">
+
+  <!-- Aktueller Plan -->
+  <div class="plan-card {% if not plan_info.expired %}active-plan{% endif %}">
+    <span class="plan-badge badge-{{ plan_info.plan }}">{{ plan_info.plan | upper }}</span>
+    <div class="plan-name">{{ plan_info.name }}</div>
+    <div class="plan-price">{{ plan_info.label }}</div>
+
+    <div class="plan-stat">
+      <span>Status</span>
+      <span class="stat-val" style="color:{% if plan_info.expired %}#f38ba8{% else %}var(--green){% endif %}">
+        {% if plan_info.expired %}Abgelaufen{% else %}Aktiv{% endif %}
+      </span>
+    </div>
+    <div class="plan-stat">
+      <span>Läuft bis</span>
+      <span class="stat-val">{{ plan_info.expires }}</span>
+    </div>
+    <div class="plan-stat">
+      <span>Verbleibend</span>
+      <span class="stat-val" style="color:{% if plan_info.days_left < 5 %}#f38ba8{% elif plan_info.days_left < 14 %}var(--yellow){% else %}var(--text){% endif %}">
+        {{ plan_info.days_left }} Tage
+      </span>
+    </div>
+
+    {% if plan_info.max_posts %}
+    <div class="plan-stat" style="flex-direction:column;align-items:flex-start;gap:8px">
+      <div style="display:flex;justify-content:space-between;width:100%">
+        <span>Posts diesen Monat</span>
+        <span class="stat-val">{{ plan_info.posts_this_month }} / {{ plan_info.max_posts }}</span>
+      </div>
+      <div class="usage-bar-wrap" style="width:100%;margin:0">
+        {% set pct = ((plan_info.posts_this_month / plan_info.max_posts) * 100) | int %}
+        <div class="usage-bar">
+          <div class="usage-fill {% if pct >= 90 %}danger{% elif pct >= 70 %}warning{% endif %}"
+               style="width:{{ [pct, 100] | min }}%"></div>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="plan-stat">
+      <span>Posts diesen Monat</span>
+      <span class="stat-val">{{ plan_info.posts_this_month }} <span style="color:var(--muted);font-weight:400">(unbegrenzt)</span></span>
+    </div>
+    {% endif %}
+
+    <div class="plan-stat">
+      <span>DM-Handler</span>
+      <span class="stat-val" style="color:{% if plan_info.limits.dm_handler %}var(--green){% else %}var(--subdued){% endif %}">
+        {% if plan_info.limits.dm_handler %}Aktiv{% else %}—{% endif %}
+      </span>
+    </div>
+    <div class="plan-stat">
+      <span>Medien-KI</span>
+      <span class="stat-val" style="color:{% if plan_info.limits.vision %}var(--green){% else %}var(--subdued){% endif %}">
+        {% if plan_info.limits.vision %}Aktiv{% else %}—{% endif %}
+      </span>
+    </div>
+    <div class="plan-stat">
+      <span>Trend-Recherche</span>
+      <span class="stat-val" style="color:{% if plan_info.limits.research %}var(--green){% else %}var(--subdued){% endif %}">
+        {% if plan_info.limits.research %}Aktiv{% else %}—{% endif %}
+      </span>
+    </div>
+  </div>
+
+  <!-- License Key -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="license-box">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">🔑 License Key aktivieren</div>
+      <div style="font-size:13px;color:var(--muted)">Du hast einen Key erhalten? Hier eintragen.</div>
+      <div class="license-input">
+        <input id="license-key-input" type="text" placeholder="SZB-P-202606-XXXXXXXX" maxlength="24" />
+        <button class="btn" onclick="activateLicense()" style="white-space:nowrap">Aktivieren</button>
+      </div>
+      <div id="license-msg" style="font-size:13px;margin-top:8px;display:none"></div>
+    </div>
+
+    {% if plan_info.stripe_customer_id %}
+    <div class="license-box">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px">Stripe Abo</div>
+      <div style="font-size:12px;color:var(--muted);font-family:monospace">{{ plan_info.stripe_subscription_id or "—" }}</div>
+    </div>
+    {% endif %}
+
+    {% if plan_info.expired %}
+    <div style="background:rgba(243,139,168,.1);border:1px solid #f38ba8;border-radius:10px;padding:16px;font-size:14px">
+      <div style="font-weight:700;color:#f38ba8;margin-bottom:6px">⚠️ Plan abgelaufen</div>
+      Content-Generierung ist gesperrt. Bitte upgraden oder License Key eingeben.
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Plan Übersicht -->
+<div class="card" style="margin-bottom:24px">
+  <div class="card-header">Pläne vergleichen</div>
+
+  <div class="plans-grid" style="padding:20px">
+    {% for key, p in plans.items() %}
+    <div class="plan-tier {% if key == plan_info.plan %}current{% endif %}">
+      <div class="tier-name">{{ p.name }}</div>
+      <div class="tier-price">{{ p.label }}</div>
+      <ul class="tier-features">
+        <li>{% if p.max_posts %}{{ p.max_posts }} Posts/Monat{% else %}Unbegrenzte Posts{% endif %}</li>
+        <li>{{ p.max_platforms }} Plattformen</li>
+        <li {% if not p.vision %}class="no"{% endif %}>Medien-KI</li>
+        <li {% if not p.dm_handler %}class="no"{% endif %}>DM-Handler</li>
+        <li {% if not p.research %}class="no"{% endif %}>Trend-Recherche</li>
+      </ul>
+
+      {% if key == plan_info.plan %}
+        <button class="btn btn-secondary" disabled style="width:100%;opacity:.5">Aktueller Plan</button>
+      {% elif key == 'trial' %}
+        <button class="btn btn-secondary" disabled style="width:100%;opacity:.5">Kostenlos</button>
+      {% elif stripe_ok and price_ids.get(key) %}
+        <a href="/billing/checkout/{{ key }}" class="btn" style="width:100%;display:block;text-align:center;text-decoration:none">
+          Upgrade →
+        </a>
+      {% else %}
+        <button class="btn btn-secondary" style="width:100%" onclick="document.getElementById('license-key-input').focus()">
+          Key eingeben
+        </button>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+async function activateLicense() {
+  const key = document.getElementById('license-key-input').value.trim();
+  const msg = document.getElementById('license-msg');
+  if (!key) return;
+
+  msg.style.display = 'block';
+  msg.style.color = 'var(--muted)';
+  msg.textContent = 'Prüfe Key...';
+
+  const r = await fetch('/billing/activate', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({key})
+  });
+  const d = await r.json();
+
+  if (d.ok) {
+    msg.style.color = 'var(--green)';
+    msg.textContent = `✓ ${d.name}-Plan aktiviert bis ${d.expires}`;
+    setTimeout(() => location.reload(), 1500);
+  } else {
+    msg.style.color = '#f38ba8';
+    msg.textContent = '✗ ' + (d.error || 'Ungültiger Key');
+  }
+}
+
+document.getElementById('license-key-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') activateLicense();
+});
+</script>
+{% endblock %}

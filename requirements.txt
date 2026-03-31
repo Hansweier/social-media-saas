@@ -1,0 +1,12 @@
+anthropic>=0.40.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+schedule>=1.2.0
+requests-oauthlib>=1.3.1
+flask>=3.0.0
+pillow>=10.0.0
+openai>=1.0.0
+werkzeug>=3.0.0
+tenacity>=8.2.0
+claude-agent-sdk
+stripe>=7.0.0

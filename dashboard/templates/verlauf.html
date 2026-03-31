@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Post-Verlauf{% endblock %}
+
+{% block extra_head %}
+<style>
+.history-filters { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:20px; }
+.filter-btn { padding:5px 14px; border-radius:20px; border:1px solid var(--border); background:var(--surface2); color:var(--muted); font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; }
+.filter-btn:hover, .filter-btn.active { background:var(--accent); color:white; border-color:var(--accent); }
+
+.history-table { width:100%; border-collapse:collapse; }
+.history-table th { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); }
+.history-table td { padding:12px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:top; }
+.history-table tr:last-child td { border-bottom:none; }
+.history-table tr:hover td { background:var(--surface2); }
+
+.plat-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
+.content-preview { color:var(--muted); font-size:12px; max-width:420px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.content-expand { display:none; color:var(--text); font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-word; margin-top:6px; max-width:420px; }
+.expand-toggle { font-size:11px; color:var(--blue); cursor:pointer; margin-top:3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+  <div>
+    <div class="page-title" style="margin:0">Post-Verlauf</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:3px">{{ total }} Einträge gesamt</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <input type="text" id="search" placeholder="Suchen..." oninput="filterPosts()"
+      style="padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;width:200px">
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="history-filters">
+  <span style="font-size:12px;color:var(--muted)">Plattform:</span>
+  <button class="filter-btn active" data-group="plat" data-val="all"       onclick="setFilter('plat','all',this)">Alle</button>
+  {% for p, color in [('instagram','#e1306c'),('facebook','#1877f2'),('linkedin','#0a66c2'),('twitter','#1da1f2'),('tiktok','#ff0050')] %}
+  <button class="filter-btn" data-group="plat" data-val="{{ p }}" onclick="setFilter('plat','{{ p }}',this)">{{ p|capitalize }}</button>
+  {% endfor %}
+  <span style="font-size:12px;color:var(--muted);margin-left:8px">Status:</span>
+  <button class="filter-btn active" data-group="status" data-val="all"       onclick="setFilter('status','all',this)">Alle</button>
+  <button class="filter-btn"        data-group="status" data-val="gepostet"   onclick="setFilter('status','gepostet',this)">✓ Gepostet</button>
+  <button class="filter-btn"        data-group="status" data-val="fehler"     onclick="setFilter('status','fehler',this)">✗ Fehler</button>
+  <button class="filter-btn"        data-group="status" data-val="abgelehnt"  onclick="setFilter('status','abgelehnt',this)">⊘ Abgelehnt</button>
+</div>
+
+{% if not posts %}
+<div class="empty-state">
+  <div class="icon">📋</div>
+  <h3>Noch keine Posts im Verlauf</h3>
+  <p>Sobald Posts verarbeitet oder gepostet wurden, erscheinen sie hier.</p>
+  <a href="/vorschau/woche" class="btn btn-primary">→ Zur Wochenplanung</a>
+</div>
+{% else %}
+<div class="card" style="padding:0;overflow:hidden">
+  <table class="history-table" id="historyTable">
+    <thead>
+      <tr>
+        <th>Datum</th>
+        <th>Plattform</th>
+        <th>Inhalt</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in posts %}
+      {% set st = p.get('status','') %}
+      {% set plat = p.get('platform','') %}
+      {% set colors = {'instagram':'#e1306c','facebook':'#1877f2','linkedin':'#0a66c2','twitter':'#1da1f2','tiktok':'#ff0050'} %}
+      <tr data-platform="{{ plat }}" data-status="{{ st }}" data-search="{{ (p.get('topic','') + ' ' + (p.get('content','') or ''))|lower }}">
+        <td style="white-space:nowrap;color:var(--muted)">
+          {{ p.get('scheduled_time','')[:16]|replace('T',' ') }}
+        </td>
+        <td>
+          <span class="plat-dot" style="background:{{ colors.get(plat,'#64748b') }}"></span>
+          <span style="font-size:12px;font-weight:600">{{ plat|capitalize }}</span>
+        </td>
+        <td>
+          {% if p.get('topic') %}
+          <div style="font-size:12px;font-weight:600;margin-bottom:3px">{{ p.topic[:60] }}</div>
+          {% endif %}
+          {% if p.get('content') %}
+          <div class="content-preview" id="prev-{{ loop.index }}">{{ p.content[:120] }}{% if p.content|length > 120 %}…{% endif %}</div>
+          {% if p.content|length > 120 %}
+          <div class="content-expand" id="exp-{{ loop.index }}">{{ p.content }}</div>
+          <span class="expand-toggle" onclick="toggleContent({{ loop.index }})">Mehr lesen ↓</span>
+          {% endif %}
+          {% else %}
+          <span style="color:var(--border);font-size:12px">Kein Inhalt</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if st == 'gepostet' %}
+          <span class="badge green">✓ Gepostet</span>
+          {% elif st == 'fehler' %}
+          <span class="badge red">✗ Fehler</span>
+          {% elif st == 'abgelehnt' %}
+          <span class="badge grey">⊘ Abgelehnt</span>
+          {% elif st == 'freigegeben' %}
+          <span class="badge blue">✓ Freigegeben</span>
+          {% else %}
+          <span class="badge grey">{{ st }}</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if p.get('content') %}
+          <button class="btn btn-secondary btn-sm" onclick="copyToClipboard({{ p.get('content','')|tojson }}, 'Post')" title="Kopieren">⧉</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div style="margin-top:12px;font-size:12px;color:var(--muted);text-align:center" id="row-count">
+  {{ total }} Einträge
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const _filters = { plat: 'all', status: 'all' };
+
+function toggleContent(idx) {
+  const prev = document.getElementById('prev-' + idx);
+  const exp  = document.getElementById('exp-' + idx);
+  const toggle = document.querySelector(`.expand-toggle[onclick="toggleContent(${idx})"]`);
+  const open = exp.style.display === 'block';
+  exp.style.display  = open ? 'none'  : 'block';
+  prev.style.display = open ? ''      : 'none';
+  if (toggle) toggle.textContent = open ? 'Mehr lesen ↓' : 'Weniger ↑';
+}
+
+function setFilter(group, val, btn) {
+  _filters[group] = val;
+  // Deactivate all buttons in the same group, activate clicked one
+  document.querySelectorAll(`.filter-btn[data-group="${group}"]`).forEach(b => {
+    b.classList.toggle('active', b === btn);
+  });
+  applyFilters();
+}
+
+function applyFilters() {
+  const q = (document.getElementById('search')?.value || '').toLowerCase();
+  const rows = document.querySelectorAll('#historyTable tbody tr');
+  let visible = 0;
+  rows.forEach(row => {
+    const platOk   = _filters.plat   === 'all' || row.dataset.platform === _filters.plat;
+    const statusOk = _filters.status === 'all' || row.dataset.status   === _filters.status;
+    const searchOk = !q || (row.dataset.search || '').includes(q);
+    const show = platOk && statusOk && searchOk;
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  const cnt = document.getElementById('row-count');
+  if (cnt) cnt.textContent = visible + ' Einträge';
+}
+</script>
+{% endblock %}

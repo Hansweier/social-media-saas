@@ -1,0 +1,684 @@
+{% extends "base.html" %}
+{% block title %}Kalender{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Platform Tabs ── */
+.plat-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:18px; }
+.plat-tab  { padding:6px 14px; border-radius:20px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid var(--border); color:var(--muted); text-decoration:none; transition:all .15s; }
+.plat-tab:hover  { border-color:var(--accent); color:var(--accent); }
+.plat-tab.active { background:rgba(203,166,247,.15); border-color:var(--accent); color:var(--accent); }
+.plat-tab.paused { opacity:.5; }
+
+/* ── Level 1: Week Rows ── */
+.week-row {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  margin-bottom:8px;
+  overflow:hidden;
+}
+.week-row.open { border-color:rgba(203,166,247,.4); }
+.week-header {
+  display:flex; align-items:center; gap:14px;
+  padding:14px 18px; cursor:pointer; user-select:none;
+}
+.week-header:hover { background:rgba(255,255,255,.03); }
+.week-kw    { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; min-width:40px; }
+.week-range { font-size:13px; font-weight:600; flex:1; }
+.week-stats { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.stat-pill  { font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+.sp-total    { background:rgba(140,143,173,.15); color:var(--muted); }
+.sp-approved { background:rgba(166,227,161,.15); color:#a6e3a1; }
+.sp-pending  { background:rgba(137,180,250,.15); color:#89b4fa; }
+.sp-rejected { background:rgba(243,139,168,.15); color:#f38ba8; }
+.week-chevron{ font-size:11px; color:var(--subdued); transition:transform .2s; margin-left:4px; flex-shrink:0; }
+.week-row.open .week-chevron { transform:rotate(90deg); }
+
+/* ── Level 1 Body ── */
+.week-body { display:none; padding:0 14px 14px; }
+.week-row.open .week-body { display:block; }
+
+/* ── Level 2: Day Buttons ── */
+.days-strip { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:0; }
+.day-btn {
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:8px; padding:9px 7px;
+  cursor:pointer; user-select:none;
+  text-align:center; transition:border-color .15s, background .15s;
+  position:relative;
+}
+.day-btn:hover     { border-color:rgba(203,166,247,.35); background:rgba(203,166,247,.04); }
+.day-btn.today     { border-color:rgba(203,166,247,.5); background:rgba(203,166,247,.06); }
+.day-btn.past      { opacity:.5; }
+.day-btn.selected  { border-color:var(--accent); background:rgba(203,166,247,.1); }
+.day-btn .db-name  { font-size:10px; font-weight:700; text-transform:uppercase; color:var(--subdued); margin-bottom:3px; }
+.day-btn .db-date  { font-size:12px; font-weight:600; color:var(--text); margin-bottom:5px; }
+.day-btn .db-today { font-size:9px; color:var(--accent); font-weight:700; }
+
+/* Post-count dots row */
+.day-btn .db-dots  { display:flex; gap:3px; justify-content:center; flex-wrap:wrap; min-height:8px; }
+.db-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+
+/* ── Level 2 Detail Panel (posts for selected day) ── */
+.day-detail {
+  display:none; margin-top:8px;
+  background:rgba(255,255,255,.02);
+  border:1px solid rgba(203,166,247,.2);
+  border-radius:10px; padding:12px 14px;
+}
+.day-detail.open { display:block; }
+.dd-header { font-size:12px; font-weight:700; color:var(--muted); margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
+
+/* ── Level 3: Post Cards ── */
+.post-card {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px; padding:10px 12px;
+  margin-bottom:6px; cursor:pointer;
+  transition:border-color .15s, background .15s;
+  display:flex; align-items:center; gap:10px;
+}
+.post-card:hover  { border-color:rgba(203,166,247,.35); background:rgba(203,166,247,.04); }
+.post-card.active { border-color:var(--accent); background:rgba(203,166,247,.08); }
+.pc-dot   { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.pc-plat  { font-size:11px; font-weight:700; min-width:62px; }
+.pc-time  { font-size:11px; color:var(--subdued); min-width:38px; }
+.pc-topic { font-size:12px; color:var(--text); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pc-apst  { font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600; flex-shrink:0; }
+.apst-freigegeben { background:rgba(166,227,161,.15); color:#a6e3a1; }
+.apst-abgelehnt   { background:rgba(243,139,168,.12); color:#f38ba8; }
+.apst-pending     { background:rgba(137,180,250,.1);  color:#89b4fa; }
+
+.s-geplant    { background:#6c7086; }
+.s-generiert  { background:#89b4fa; }
+.s-freigegeben{ background:#a6e3a1; }
+.s-gepostet   { background:#a6e3a1; }
+.s-abgelehnt  { background:#f38ba8; }
+.s-fehler     { background:#f38ba8; }
+
+.p-ig { color:#e1306c; } .p-fb { color:#1877f2; }
+.p-li { color:#0a66c2; } .p-tw { color:#1da1f2; } .p-tt { color:#ff0050; }
+
+.add-post-inline { font-size:11px; color:var(--subdued); cursor:pointer; padding:5px 0; text-align:center; }
+.add-post-inline:hover { color:var(--accent); }
+
+/* ── Level 3 Approval Panel ── */
+.approval-panel {
+  display:none; margin-top:8px;
+  background:var(--surface);
+  border:1px solid rgba(203,166,247,.3);
+  border-radius:10px; padding:16px 18px;
+}
+.approval-panel.open { display:block; }
+.ap-header { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.ap-title  { font-size:14px; font-weight:700; }
+.ap-meta   { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:10px; }
+.ap-meta-item .apm-label { font-size:10px; font-weight:700; text-transform:uppercase; color:var(--subdued); margin-bottom:2px; }
+.ap-meta-item span { font-size:12px; }
+.ap-content{
+  background:var(--surface2); border-radius:8px; padding:10px 12px;
+  font-size:12px; white-space:pre-wrap; line-height:1.6;
+  max-height:130px; overflow-y:auto; margin-bottom:12px; color:var(--text);
+}
+.ap-empty { font-size:12px; color:var(--subdued); font-style:italic; margin-bottom:12px; }
+.ap-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.btn-approve { background:rgba(166,227,161,.15); border:1px solid rgba(166,227,161,.4); color:#a6e3a1; padding:7px 16px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; }
+.btn-approve:hover:not(:disabled) { background:rgba(166,227,161,.28); }
+.btn-reject  { background:rgba(243,139,168,.12); border:1px solid rgba(243,139,168,.3); color:#f38ba8; padding:7px 16px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; }
+.btn-reject:hover:not(:disabled)  { background:rgba(243,139,168,.22); }
+.btn-variants{ background:rgba(137,180,250,.12); border:1px solid rgba(137,180,250,.3); color:#89b4fa; padding:7px 16px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; }
+.btn-variants:hover:not(:disabled){ background:rgba(137,180,250,.22); }
+button:disabled { opacity:.5; cursor:not-allowed; }
+
+/* ── Archive ── */
+.archive-section { margin-top:32px; }
+.archive-title   { font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:10px; }
+.month-row { background:var(--surface); border:1px solid var(--border); border-radius:10px; margin-bottom:5px; overflow:hidden; }
+.month-header { display:flex; align-items:center; gap:10px; padding:10px 16px; cursor:pointer; user-select:none; }
+.month-header:hover { background:rgba(255,255,255,.03); }
+.month-label  { font-size:13px; font-weight:600; flex:1; }
+.month-stats  { font-size:11px; color:var(--muted); }
+.month-chevron{ font-size:11px; color:var(--subdued); transition:transform .2s; }
+.month-row.open .month-chevron { transform:rotate(90deg); }
+.month-body { display:none; padding:4px 14px 12px; }
+.month-row.open .month-body { display:block; }
+.archive-post { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:7px; font-size:12px; margin-bottom:3px; background:var(--surface2); }
+.archive-post .ap-time  { color:var(--subdued); font-size:11px; min-width:105px; }
+.archive-post .ap-plat  { font-weight:700; font-size:11px; min-width:68px; }
+.archive-post .ap-topic { color:var(--muted); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.archive-post .ap-st    { font-size:10px; padding:2px 7px; border-radius:8px; font-weight:600; }
+.aps-gepostet  { background:rgba(166,227,161,.15); color:#a6e3a1; }
+.aps-freigegeben{background:rgba(166,227,161,.1); color:#a6e3a1; }
+.aps-abgelehnt { background:rgba(243,139,168,.15); color:#f38ba8; }
+.aps-geplant   { background:rgba(140,143,173,.12); color:var(--muted); }
+.aps-generiert { background:rgba(137,180,250,.12); color:#89b4fa; }
+.aps-fehler    { background:rgba(243,139,168,.12); color:#f38ba8; }
+
+/* ── Modals ── */
+.sched-panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:20px; }
+.day-checks  { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+.day-check   { display:flex; align-items:center; gap:5px; font-size:12px; }
+.time-pills  { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.time-pill   { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:3px 10px; font-size:12px; display:flex; align-items:center; gap:5px; }
+.time-pill .rm { cursor:pointer; color:var(--subdued); font-size:10px; }
+.time-pill .rm:hover { color:#f38ba8; }
+#newTimeInput { padding:4px 8px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; width:88px; }
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:100; align-items:center; justify-content:center; }
+.modal-overlay.open { display:flex; }
+.modal-box { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:28px; width:440px; max-width:95vw; }
+.form-group { margin-bottom:14px; }
+.form-group label { font-size:12px; font-weight:600; color:var(--muted); display:block; margin-bottom:5px; text-transform:uppercase; }
+.form-group input, .form-group select, .form-group textarea {
+  width:100%; padding:9px 12px; background:var(--surface2); border:1px solid var(--border);
+  border-radius:8px; color:var(--text); font-size:13px; font-family:inherit;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+  <div>
+    <div class="page-title" style="margin:0">Content-Kalender</div>
+    <div class="page-sub" style="margin:2px 0 0">4-Wochen-Vorschau &amp; Jahres-Archiv</div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn btn-secondary btn-sm" onclick="openMultiWeekModal()">⚡ Wochen generieren</button>
+    <button class="btn btn-secondary btn-sm" onclick="openScheduleEditor()">⚙ Zeitplan</button>
+    <button class="btn btn-primary btn-sm"   onclick="document.getElementById('addModal').classList.add('open')">+ Post planen</button>
+  </div>
+</div>
+
+<!-- Platform Tabs -->
+<div class="plat-tabs">
+  <a href="?p=all" class="plat-tab {{ 'active' if active_platform == 'all' else '' }}">Alle</a>
+  {% for p in platforms %}
+  <a href="?p={{ p }}"
+     class="plat-tab {{ 'active' if active_platform == p else '' }} {{ 'paused' if p in paused_platforms else '' }}">
+    {{ platform_icons[p] }} {{ p|capitalize }}{% if p in paused_platforms %} ⏸{% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+<!-- Schedule Editor Panel (hidden by default) -->
+<div class="sched-panel" id="schedPanel" style="display:none">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div style="font-size:14px;font-weight:700">⚙ Posting-Zeitplan</div>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('schedPanel').style.display='none'">✕</button>
+  </div>
+  <div style="margin-bottom:10px">
+    <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase">Plattform</label>
+    <select id="schedPlatform" onchange="loadScheduleEditor()" style="margin-top:6px;width:200px;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+      {% for p in platforms %}<option value="{{ p }}">{{ p|capitalize }}</option>{% endfor %}
+    </select>
+  </div>
+  <div style="margin-bottom:10px">
+    <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px">Posting-Tage</label>
+    <div class="day-checks" id="dayChecks"></div>
+  </div>
+  <div style="margin-bottom:14px">
+    <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px">Uhrzeiten</label>
+    <div class="time-pills" id="timePills"></div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-primary btn-sm" onclick="saveSchedule()">Speichern</button>
+    <span id="schedSaveStatus" style="font-size:12px;color:#a6e3a1;align-self:center"></span>
+  </div>
+</div>
+
+<!-- ═══ LEVEL 1: 4-Week Rows ══════════════════════════════════════════════ -->
+{% for week in weeks %}
+{% set wIdx = loop.index0 %}
+<div class="week-row" id="week-{{ wIdx }}">
+
+  <!-- Week Header -->
+  <div class="week-header" onclick="toggleWeek({{ wIdx }})">
+    <span class="week-kw">KW&nbsp;{{ week.kw }}</span>
+    <span class="week-range">{{ week.start.strftime('%d. %b') }} – {{ week.end.strftime('%d. %b %Y') }}</span>
+    <div class="week-stats">
+      <span class="stat-pill sp-total">{{ week.total }} Posts</span>
+      {% if week.approved > 0 %}<span class="stat-pill sp-approved">{{ week.approved }} ok</span>{% endif %}
+      {% if week.pending  > 0 %}<span class="stat-pill sp-pending">{{ week.pending }} offen</span>{% endif %}
+      {% if week.rejected > 0 %}<span class="stat-pill sp-rejected">{{ week.rejected }} abgelehnt</span>{% endif %}
+    </div>
+    <span class="week-chevron">▶</span>
+  </div>
+
+  <!-- Week Body -->
+  <div class="week-body" id="wbody-{{ wIdx }}">
+
+    <!-- LEVEL 2: Day Buttons Strip -->
+    <div class="days-strip">
+      {% for day in week.days %}
+      {% set dHasPosts = day.posts | length > 0 %}
+      <div class="day-btn {{ 'today' if day.is_today else '' }} {{ 'past' if day.is_past else '' }}"
+           id="daybtn-{{ wIdx }}-{{ loop.index0 }}"
+           onclick="selectDay({{ wIdx }}, {{ loop.index0 }}, '{{ day.iso }}')">
+        <div class="db-name">{{ day.name }}</div>
+        <div class="db-date">{{ day.date.strftime('%d.%m') }}</div>
+        {% if day.is_today %}<div class="db-today">Heute</div>{% endif %}
+        <!-- colored dots per post -->
+        <div class="db-dots">
+          {% for post in day.posts %}
+          {% set st = post.get('status','geplant') %}
+          <span class="db-dot s-{{ st }}" title="{{ post.get('platform','') }} – {{ post.get('topic','') }}"></span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- LEVEL 2 Detail: Posts for selected day -->
+    <div class="day-detail" id="dd-{{ wIdx }}">
+      <div class="dd-header">
+        <span id="dd-title-{{ wIdx }}"></span>
+        <button class="btn btn-ghost btn-sm" onclick="closeDay({{ wIdx }})">✕</button>
+      </div>
+      <div id="dd-posts-{{ wIdx }}"></div>
+
+      <!-- LEVEL 3: Approval Panel -->
+      <div class="approval-panel" id="ap-{{ wIdx }}">
+        <div class="ap-header">
+          <div>
+            <div class="ap-title" id="ap-title-{{ wIdx }}"></div>
+            <div class="ap-meta"  id="ap-meta-{{ wIdx }}"></div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="closeApproval({{ wIdx }})">✕</button>
+        </div>
+        <div id="ap-content-{{ wIdx }}"></div>
+        <div class="ap-actions" id="ap-actions-{{ wIdx }}"></div>
+      </div>
+    </div>
+
+  </div><!-- /week-body -->
+</div><!-- /week-row -->
+{% endfor %}
+
+<!-- Legend -->
+<div style="display:flex;gap:14px;margin-top:10px;flex-wrap:wrap">
+  {% for key, label in [('geplant','Geplant'),('generiert','KI-generiert'),('freigegeben','Freigegeben'),('gepostet','Gepostet'),('abgelehnt','Abgelehnt'),('fehler','Fehler')] %}
+  <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)">
+    <span class="db-dot s-{{ key }}"></span>{{ label }}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ═══ Archive ════════════════════════════════════════════════════════════ -->
+<div class="archive-section">
+  <div class="archive-title">Archiv — vergangene 12 Monate</div>
+  {% for month in archive %}
+  <div class="month-row" id="month-{{ loop.index0 }}">
+    <div class="month-header" onclick="this.parentElement.classList.toggle('open')">
+      <span class="month-label">{{ month.label }}</span>
+      <span class="month-stats">{% if month.total > 0 %}{{ month.gepostet }}/{{ month.total }} gepostet{% else %}Keine Posts{% endif %}</span>
+      <span class="month-chevron" style="margin-left:10px">▶</span>
+    </div>
+    <div class="month-body">
+      {% if month.posts %}
+        {% for post in month.posts %}
+        {% set st = post.get('status','geplant') %}
+        {% set pc = {'instagram':'p-ig','facebook':'p-fb','linkedin':'p-li','twitter':'p-tw','tiktok':'p-tt'} %}
+        <div class="archive-post">
+          <span class="ap-time">{{ post.get('scheduled_time','—')[:16].replace('T',' ') }}</span>
+          <span class="ap-plat {{ pc.get(post.get('platform',''),'') }}">{{ post.get('platform','?')|upper }}</span>
+          <span class="ap-topic">{{ post.get('topic','—') }}</span>
+          <span class="ap-st aps-{{ st }}">{{ st }}</span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="font-size:12px;color:var(--subdued);padding:4px 0">Keine Posts.</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── Modals ──────────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal-box">
+    <div style="font-size:16px;font-weight:700;margin-bottom:18px">+ Neuen Post planen</div>
+    <div class="form-group"><label>Plattform</label>
+      <select id="addPlatform">{% for p in platforms %}<option value="{{ p }}">{{ p|capitalize }}</option>{% endfor %}</select>
+    </div>
+    <div class="form-group"><label>Datum &amp; Uhrzeit</label>
+      <input type="datetime-local" id="addTime" value="{{ now.strftime('%Y-%m-%dT09:00') }}">
+    </div>
+    <div class="form-group"><label>Thema</label>
+      <input type="text" id="addTopic" placeholder="z.B. Teamvorstellung">
+    </div>
+    <div class="form-group"><label>Content (optional)</label>
+      <textarea id="addContent" rows="3" placeholder="Leer lassen für KI-Generierung"></textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="submitAdd()">Planen</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="document.getElementById('addModal').classList.remove('open')">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="multiWeekModal">
+  <div class="modal-box" style="width:360px">
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px">⚡ Wochen generieren</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:18px">Erstellt Posts für mehrere Wochen. Bestehende Slots werden nicht überschrieben.</div>
+    <div class="form-group"><label>Anzahl Wochen</label>
+      <select id="weeksCount">
+        <option value="1">1 Woche</option>
+        <option value="2">2 Wochen</option>
+        <option value="4" selected>4 Wochen</option>
+        <option value="8">8 Wochen</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" id="multiWeekBtn" onclick="submitMultiWeek()">Generieren</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="document.getElementById('multiWeekModal').classList.remove('open')">Abbrechen</button>
+    </div>
+    <div id="multiWeekResult" style="margin-top:10px;font-size:13px;text-align:center"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const SCHEDULES = {{ schedules | tojson }};
+
+// Post map keyed by id
+const ALL_POSTS = {};
+{% for week in weeks %}{% for day in week.days %}{% for post in day.posts %}
+ALL_POSTS[{{ post.id | tojson }}] = {{ post | tojson }};
+{% endfor %}{% endfor %}{% endfor %}
+
+// Day data: wIdx → dIdx → array of post ids
+const DAY_POST_IDS = {};
+{% for week in weeks %}
+{% set wIdx = loop.index0 %}
+DAY_POST_IDS[{{ wIdx }}] = {};
+{% for day in week.days %}
+DAY_POST_IDS[{{ wIdx }}][{{ loop.index0 }}] = {{ day.posts | map(attribute='id') | list | tojson }};
+{% endfor %}
+{% endfor %}
+
+const DAY_DATA = {};
+{% for week in weeks %}
+{% set wIdx = loop.index0 %}
+DAY_DATA[{{ wIdx }}] = [
+{% for day in week.days %}
+  { iso: {{ day.iso | tojson }}, name: {{ day.name | tojson }}, date: {{ day.date.strftime('%d.%m') | tojson }}, isToday: {{ 'true' if day.is_today else 'false' }}, isPast: {{ 'true' if day.is_past else 'false' }} },
+{% endfor %}
+];
+{% endfor %}
+
+const VALID_DAYS   = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+const DAY_LABELS   = { MON:'Montag', TUE:'Dienstag', WED:'Mittwoch', THU:'Donnerstag', FRI:'Freitag', SAT:'Samstag', SUN:'Sonntag' };
+const STATUS_LABELS= { geplant:'Geplant', generiert:'KI-generiert', freigegeben:'Freigegeben', gepostet:'Gepostet', abgelehnt:'Abgelehnt', fehler:'Fehler' };
+const PLAT_CLASS   = { instagram:'p-ig', facebook:'p-fb', linkedin:'p-li', twitter:'p-tw', tiktok:'p-tt' };
+const STATUS_DOT   = { geplant:'s-geplant', generiert:'s-generiert', freigegeben:'s-freigegeben', gepostet:'s-gepostet', abgelehnt:'s-abgelehnt', fehler:'s-fehler' };
+let _editTimes = [];
+let _openWeek = null, _openDay = null, _openDayIso = null, _selPost = null;
+
+// ── Level 1: Week Toggle ──────────────────────────────────────────────────────
+function toggleWeek(wIdx) {
+  const row    = document.getElementById('week-' + wIdx);
+  const isOpen = row.classList.contains('open');
+  // collapse all
+  document.querySelectorAll('.week-row').forEach(r => r.classList.remove('open'));
+  document.querySelectorAll('.day-detail').forEach(d => d.classList.remove('open'));
+  document.querySelectorAll('.approval-panel').forEach(a => a.classList.remove('open'));
+  document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('selected'));
+  _openWeek = null; _openDay = null; _selPost = null;
+  if (!isOpen) {
+    row.classList.add('open');
+    _openWeek = wIdx;
+  }
+}
+
+// ── Level 2: Day Toggle ───────────────────────────────────────────────────────
+function selectDay(wIdx, dIdx, iso) {
+  // Close approval panel
+  document.getElementById('ap-' + wIdx).classList.remove('open');
+  document.querySelectorAll(`#wbody-${wIdx} .post-card`).forEach(c => c.classList.remove('active'));
+  _selPost = null;
+
+  const dayDetail = document.getElementById('dd-' + wIdx);
+  const sameDayOpen = (_openDay === dIdx && _openWeek === wIdx);
+
+  // Clear selected day button
+  document.querySelectorAll(`#wbody-${wIdx} .day-btn`).forEach(b => b.classList.remove('selected'));
+
+  if (sameDayOpen) {
+    dayDetail.classList.remove('open');
+    _openDay = null; _openDayIso = null;
+    return;
+  }
+
+  _openDay    = dIdx;
+  _openDayIso = iso;
+  document.getElementById('daybtn-' + wIdx + '-' + dIdx).classList.add('selected');
+
+  // Render post cards
+  const d    = DAY_DATA[wIdx][dIdx];
+  const ids  = DAY_POST_IDS[wIdx][dIdx] || [];
+  const postsContainer = document.getElementById('dd-posts-' + wIdx);
+
+  document.getElementById('dd-title-' + wIdx).textContent =
+    d.name + ', ' + d.date + (d.isToday ? '  —  Heute' : '');
+
+  if (ids.length === 0) {
+    postsContainer.innerHTML = `<div style="font-size:12px;color:var(--subdued);padding:6px 0">Keine Posts an diesem Tag.</div>`;
+  } else {
+    postsContainer.innerHTML = ids.map(id => {
+      const p   = ALL_POSTS[id]; if (!p) return '';
+      const st  = p.status || 'geplant';
+      const pc  = PLAT_CLASS[p.platform] || '';
+      const apst= p.approval_status || '';
+      const apBadge = apst
+        ? `<span class="pc-apst apst-${apst}">${apst}</span>`
+        : `<span class="pc-apst apst-pending">${STATUS_LABELS[st]||st}</span>`;
+      return `<div class="post-card" id="pc-${id}" onclick="selectPost('${id}',${wIdx})">
+        <span class="pc-dot ${STATUS_DOT[st]||'s-geplant'}"></span>
+        <span class="pc-plat ${pc}">${(p.platform||'?').toUpperCase()}</span>
+        <span class="pc-time">${(p.scheduled_time||'').slice(11,16)}</span>
+        <span class="pc-topic">${escHtml(p.topic||'—')}</span>
+        ${apBadge}
+      </div>`;
+    }).join('');
+  }
+
+  if (!d.isPast) {
+    postsContainer.innerHTML += `<div class="add-post-inline" onclick="openAddModal('${iso}')">+ Post an diesem Tag planen</div>`;
+  }
+
+  dayDetail.classList.add('open');
+  dayDetail.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function closeDay(wIdx) {
+  document.getElementById('dd-' + wIdx).classList.remove('open');
+  document.getElementById('ap-' + wIdx).classList.remove('open');
+  document.querySelectorAll(`#wbody-${wIdx} .day-btn`).forEach(b => b.classList.remove('selected'));
+  _openDay = null; _selPost = null;
+}
+
+// ── Level 3: Post / Approval ──────────────────────────────────────────────────
+function selectPost(id, wIdx) {
+  const post   = ALL_POSTS[id]; if (!post) return;
+  const panel  = document.getElementById('ap-' + wIdx);
+  const samePost = (_selPost === id);
+
+  document.querySelectorAll(`#wbody-${wIdx} .post-card`).forEach(c => c.classList.remove('active'));
+  if (samePost) { panel.classList.remove('open'); _selPost = null; return; }
+
+  _selPost = id;
+  const card = document.getElementById('pc-' + id);
+  if (card) card.classList.add('active');
+
+  // Title
+  const pc   = PLAT_CLASS[post.platform] || '';
+  document.getElementById('ap-title-' + wIdx).innerHTML =
+    `<span class="${pc}" style="font-size:11px;font-weight:700">${(post.platform||'?').toUpperCase()}</span>
+     <span style="margin-left:8px">${escHtml(post.topic||'—')}</span>`;
+
+  // Meta
+  const st   = post.status || 'geplant';
+  const apst = post.approval_status || '';
+  document.getElementById('ap-meta-' + wIdx).innerHTML = `
+    <div class="ap-meta-item"><div class="apm-label">Status</div><span style="font-weight:600">${STATUS_LABELS[st]||st}</span></div>
+    <div class="ap-meta-item"><div class="apm-label">Zeit</div><span>${(post.scheduled_time||'').replace('T',' ').slice(0,16)}</span></div>
+    ${apst?`<div class="ap-meta-item"><div class="apm-label">Freigabe</div><span style="color:${apst==='freigegeben'?'#a6e3a1':apst==='abgelehnt'?'#f38ba8':'var(--muted)'};font-weight:600">${apst}</span></div>`:''}
+    ${post.variants?.length?`<div class="ap-meta-item"><div class="apm-label">Varianten</div><span>${post.variants.length}</span></div>`:''}
+  `;
+
+  // Content
+  const cb = document.getElementById('ap-content-' + wIdx);
+  if (post.content) {
+    cb.innerHTML = `<div class="ap-content">${escHtml(post.content.slice(0,800))}${post.content.length>800?'…':''}</div>`;
+  } else {
+    cb.innerHTML = `<div class="ap-empty">Kein Content — wird bei Generierung erstellt.</div>`;
+  }
+
+  // Actions
+  const acts = [];
+  if (st !== 'gepostet' && st !== 'fehler') {
+    if (apst !== 'freigegeben') acts.push(`<button class="btn-approve" onclick="approvePost('${id}',${wIdx},this)">✓ Freigeben</button>`);
+    if (apst !== 'abgelehnt')  acts.push(`<button class="btn-reject"   onclick="rejectPost('${id}',${wIdx},this)">✗ Ablehnen</button>`);
+  }
+  if (st === 'geplant' || st === 'generiert' || st === 'freigegeben') {
+    acts.push(`<button class="btn-variants" onclick="generateVariants('${id}',this)">⟳ Varianten</button>`);
+    acts.push(`<button class="btn btn-secondary btn-sm" onclick="triggerPost('${id}',this)">▶ Posten</button>`);
+  }
+  acts.push(`<button class="btn btn-ghost btn-sm" style="color:#f38ba8;margin-left:auto" onclick="deletePost('${id}',${wIdx},this)">Löschen</button>`);
+  document.getElementById('ap-actions-' + wIdx).innerHTML = acts.join('');
+
+  panel.classList.add('open');
+  panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function closeApproval(wIdx) {
+  document.getElementById('ap-' + wIdx).classList.remove('open');
+  document.querySelectorAll(`#wbody-${wIdx} .post-card`).forEach(c => c.classList.remove('active'));
+  _selPost = null;
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+async function approvePost(id, wIdx, btn) {
+  btn.disabled = true; btn.textContent = '...';
+  const r = await apiPost('/vorschau/freigeben/' + id);
+  if (r.ok) { toast('Freigegeben', 'success'); setTimeout(() => location.reload(), 500); }
+  else { btn.disabled=false; btn.textContent='✓ Freigeben'; toast(r.error||'Fehler','error'); }
+}
+
+async function rejectPost(id, wIdx, btn) {
+  btn.disabled = true; btn.textContent = '...';
+  const r = await apiPost('/vorschau/ablehnen/' + id);
+  if (r.ok) { toast('Abgelehnt', 'info'); setTimeout(() => location.reload(), 500); }
+  else { btn.disabled=false; btn.textContent='✗ Ablehnen'; toast(r.error||'Fehler','error'); }
+}
+
+async function generateVariants(id, btn) {
+  btn.disabled = true; btn.textContent = '⏳';
+  const r = await apiPost('/vorschau/varianten/' + id);
+  btn.disabled = false; btn.textContent = '⟳ Varianten';
+  if (r.ok) { toast('Varianten werden generiert…', 'info', 3000); setTimeout(() => location.reload(), 2500); }
+  else toast(r.error||'Fehler', 'error');
+}
+
+async function triggerPost(id, btn) {
+  btn.disabled = true; btn.textContent = '⏳';
+  const r = await apiPost('/calendar/trigger/' + id);
+  if (r.ok) { btn.textContent = '✓ Gestartet'; toast('Post wird gesendet…', 'info', 3000); }
+  else { btn.disabled=false; btn.textContent='▶ Posten'; toast(r.error||'Fehler','error'); }
+}
+
+async function deletePost(id, wIdx, btn) {
+  if (!confirm('Post löschen?')) return;
+  btn.disabled = true;
+  const r = await apiPost('/calendar/delete/' + id);
+  if (r.ok) { toast('Gelöscht', 'info'); setTimeout(() => location.reload(), 500); }
+  else { btn.disabled=false; toast(r.error||'Fehler','error'); }
+}
+
+// ── Add Post ──────────────────────────────────────────────────────────────────
+function openAddModal(dateStr) {
+  if (dateStr) document.getElementById('addTime').value = dateStr + 'T09:00';
+  document.getElementById('addModal').classList.add('open');
+}
+async function submitAdd() {
+  const platform = document.getElementById('addPlatform').value;
+  const time     = document.getElementById('addTime').value;
+  const topic    = document.getElementById('addTopic').value.trim();
+  const content  = document.getElementById('addContent').value.trim();
+  if (!time) { toast('Datum fehlt','error'); return; }
+  const r = await apiPost('/calendar/add', { platform, scheduled_time:time, topic, content:content||null });
+  if (r.ok) { toast('Post geplant','success'); document.getElementById('addModal').classList.remove('open'); setTimeout(()=>location.reload(),500); }
+  else toast(r.error||'Fehler','error');
+}
+
+// ── Multi-week generate ───────────────────────────────────────────────────────
+function openMultiWeekModal() {
+  document.getElementById('multiWeekResult').textContent = '';
+  document.getElementById('multiWeekModal').classList.add('open');
+}
+async function submitMultiWeek() {
+  const weeks = parseInt(document.getElementById('weeksCount').value);
+  const btn   = document.getElementById('multiWeekBtn');
+  btn.disabled = true; btn.textContent = '⏳ Generiere…';
+  const r = await apiPost('/calendar/mehrwochen-generieren', { weeks });
+  btn.disabled = false; btn.textContent = 'Generieren';
+  const res = document.getElementById('multiWeekResult');
+  if (r.ok) {
+    res.innerHTML = `<span style="color:#a6e3a1">${r.posts_created} Posts für ${r.weeks} Wochen erstellt</span>`;
+    setTimeout(() => { document.getElementById('multiWeekModal').classList.remove('open'); location.reload(); }, 1800);
+  } else if (r.upgrade) {
+    res.innerHTML = `<span style="color:#f38ba8">${r.error}</span><br><a href="/billing" style="font-size:12px;color:var(--accent)">Upgrade ansehen</a>`;
+  } else {
+    res.innerHTML = `<span style="color:#f38ba8">${r.error||'Fehler'}</span>`;
+  }
+}
+
+// ── Schedule Editor ───────────────────────────────────────────────────────────
+function openScheduleEditor() {
+  const p = document.getElementById('schedPanel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  if (p.style.display === 'block') { p.scrollIntoView({behavior:'smooth'}); loadScheduleEditor(); }
+}
+function loadScheduleEditor() {
+  const platform = document.getElementById('schedPlatform').value;
+  const cfg = SCHEDULES[platform] || { days:[], times:[] };
+  _editTimes = [...(cfg.times||[])];
+  document.getElementById('dayChecks').innerHTML = VALID_DAYS.map(d =>
+    `<label class="day-check"><input type="checkbox" value="${d}" ${cfg.days?.includes(d)?'checked':''}> ${DAY_LABELS[d].slice(0,2)}</label>`
+  ).join('');
+  renderTimePills();
+}
+function renderTimePills() {
+  document.getElementById('timePills').innerHTML =
+    _editTimes.map((t,i) => `<div class="time-pill">${t}<span class="rm" onclick="removeTime(${i})">✕</span></div>`).join('')
+    + `<input type="time" id="newTimeInput" value="09:00">
+       <button class="btn btn-secondary btn-sm" onclick="addTime()">+ Zeit</button>`;
+}
+function addTime() {
+  const v = document.getElementById('newTimeInput').value;
+  if (!v || _editTimes.includes(v)) return;
+  _editTimes.push(v); _editTimes.sort(); renderTimePills();
+}
+function removeTime(i) { _editTimes.splice(i,1); renderTimePills(); }
+async function saveSchedule() {
+  const platform = document.getElementById('schedPlatform').value;
+  const days  = [...document.querySelectorAll('#dayChecks input:checked')].map(e=>e.value);
+  const times = _editTimes;
+  if (!days.length||!times.length) { toast('Mind. 1 Tag + 1 Uhrzeit','error'); return; }
+  const r = await apiPost('/calendar/zeitplan-speichern', {platform,days,times});
+  if (r.ok) { SCHEDULES[platform]={days,times}; document.getElementById('schedSaveStatus').textContent='Gespeichert'; setTimeout(()=>document.getElementById('schedSaveStatus').textContent='',3000); toast('Zeitplan gespeichert','success'); }
+  else toast(r.error||'Fehler','error');
+}
+
+// ── Util ──────────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return s ? s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
+}
+document.querySelectorAll('.modal-overlay').forEach(el =>
+  el.addEventListener('click', e => { if(e.target===el) el.classList.remove('open'); })
+);
+</script>
+{% endblock %}

@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sozibot — KI-Social-Media-Bot für dein Unternehmen</title>
+  <meta name="description" content="Sozibot erstellt automatisch hochwertige Social-Media-Posts für Instagram, Facebook, LinkedIn, Twitter und TikTok — powered by Claude AI.">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #11111b; --surface: #1e1e2e; --surface2: #313244; --border: #45475a;
+      --accent: #cba6f7; --accent2: #b4befe; --text: #cdd6f4; --muted: #a6adc8;
+      --subdued: #6c7086; --green: #a6e3a1; --blue: #89b4fa; --peach: #fab387;
+      --red: #f38ba8; --yellow: #f9e2af; --teal: #94e2d5;
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text);
+           -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 0 5%;
+      display: flex; align-items: center; justify-content: space-between; height: 64px;
+      background: rgba(17,17,27,.85); backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(69,71,90,.5);
+    }
+    .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-logo svg { width: 34px; height: 34px; }
+    .nav-logo-text { font-size: 20px; font-weight: 800; color: var(--text); }
+    .nav-logo-text span { color: var(--accent); }
+    .nav-links { display: flex; align-items: center; gap: 28px; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color .15s; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta { padding: 9px 20px; background: linear-gradient(135deg, var(--accent), var(--accent2));
+                color: #11111b; border: none; border-radius: 8px; font-size: 14px; font-weight: 700;
+                cursor: pointer; text-decoration: none; transition: opacity .15s, transform .15s;
+                box-shadow: 0 2px 16px rgba(203,166,247,.3); }
+    .nav-cta:hover { opacity: .88; transform: translateY(-1px); }
+    @media(max-width:640px){ .nav-links { display:none; } }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh; padding: 120px 5% 80px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; top: -40%; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 800px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(203,166,247,.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 6px 14px; border-radius: 20px;
+      border: 1px solid rgba(203,166,247,.3); background: rgba(203,166,247,.08);
+      color: var(--accent); font-size: 13px; font-weight: 600; margin-bottom: 28px;
+    }
+    .hero-badge .dot { width: 7px; height: 7px; background: var(--accent); border-radius: 50%;
+                       animation: pulse 2s ease infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+    .hero h1 {
+      font-size: clamp(38px, 6vw, 72px); font-weight: 900; line-height: 1.1;
+      margin-bottom: 22px; letter-spacing: -.03em;
+      max-width: 820px;
+    }
+    .hero h1 .grad {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 50%, var(--teal) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .hero p {
+      font-size: clamp(16px, 2vw, 20px); color: var(--muted); max-width: 560px;
+      line-height: 1.7; margin-bottom: 40px;
+    }
+    .hero-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-bottom: 64px; }
+    .btn-xl {
+      padding: 16px 32px; border-radius: 10px; font-size: 16px; font-weight: 700;
+      cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+      transition: all .2s;
+    }
+    .btn-xl:hover { transform: translateY(-2px); }
+    .btn-xl.primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #11111b; box-shadow: 0 4px 24px rgba(203,166,247,.4);
+    }
+    .btn-xl.primary:hover { box-shadow: 0 8px 32px rgba(203,166,247,.55); }
+    .btn-xl.secondary {
+      background: var(--surface); color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-xl.secondary:hover { border-color: var(--accent); }
+
+    /* ── PLATFORM BADGES ── */
+    .platforms { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .plat-badge {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; font-size: 13px; font-weight: 600; color: var(--muted);
+    }
+
+    /* ── SECTIONS ── */
+    section { padding: 100px 5%; }
+    .section-label {
+      text-align: center; font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .1em; color: var(--accent); margin-bottom: 14px;
+    }
+    .section-title {
+      text-align: center; font-size: clamp(28px, 4vw, 46px); font-weight: 800;
+      margin-bottom: 14px; letter-spacing: -.02em;
+    }
+    .section-sub {
+      text-align: center; font-size: 17px; color: var(--muted); max-width: 560px;
+      margin: 0 auto 60px; line-height: 1.7;
+    }
+
+    /* ── HOW IT WORKS ── */
+    .steps-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 24px; max-width: 960px; margin: 0 auto;
+    }
+    .step-box {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+      padding: 28px 24px; position: relative; transition: border-color .2s, transform .2s;
+    }
+    .step-box:hover { border-color: rgba(203,166,247,.4); transform: translateY(-3px); }
+    .step-num {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #11111b; font-size: 18px; font-weight: 800; display: flex;
+      align-items: center; justify-content: center; margin-bottom: 16px;
+    }
+    .step-box h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+    .step-box p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+    /* ── FEATURES ── */
+    .features-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px; max-width: 1100px; margin: 0 auto;
+    }
+    .feat-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+      padding: 28px; transition: border-color .2s, transform .2s;
+    }
+    .feat-card:hover { border-color: rgba(203,166,247,.35); transform: translateY(-2px); }
+    .feat-icon { font-size: 32px; margin-bottom: 14px; }
+    .feat-card h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+    .feat-card p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+    /* ── STATS ── */
+    .stats-row {
+      display: flex; justify-content: center; flex-wrap: wrap; gap: 0;
+      border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+      max-width: 900px; margin: 0 auto 80px;
+    }
+    .stat-item {
+      flex: 1; min-width: 160px; padding: 32px 20px; text-align: center;
+      border-right: 1px solid var(--border); background: var(--surface);
+    }
+    .stat-item:last-child { border-right: none; }
+    .stat-big { font-size: 42px; font-weight: 900; letter-spacing: -.03em;
+                background: linear-gradient(135deg, var(--accent), var(--accent2));
+                -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .stat-lbl { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+    /* ── TESTIMONIAL / QUOTE ── */
+    .quote-box {
+      max-width: 720px; margin: 0 auto;
+      background: linear-gradient(135deg, rgba(203,166,247,.08), rgba(180,190,254,.04));
+      border: 1px solid rgba(203,166,247,.25); border-radius: 20px;
+      padding: 44px 48px; text-align: center;
+    }
+    .quote-text { font-size: 22px; font-weight: 600; line-height: 1.6; margin-bottom: 20px; }
+    .quote-text span { color: var(--accent); }
+    .quote-sub { font-size: 14px; color: var(--muted); }
+
+    /* ── CTA SECTION ── */
+    .cta-section {
+      text-align: center; padding: 100px 5%;
+      background: linear-gradient(180deg, transparent, rgba(203,166,247,.04), transparent);
+    }
+    .cta-section h2 { font-size: clamp(28px, 4vw, 52px); font-weight: 900; margin-bottom: 16px; letter-spacing: -.02em; }
+    .cta-section p { font-size: 17px; color: var(--muted); max-width: 480px; margin: 0 auto 40px; line-height: 1.7; }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border); padding: 28px 5%;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+    }
+    footer .logo-small { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; }
+    footer .logo-small span { color: var(--accent); }
+    footer p { font-size: 12px; color: var(--subdued); }
+    footer a { color: var(--muted); text-decoration: none; font-size: 13px; }
+    footer a:hover { color: var(--accent); }
+
+    /* ── SCREEN MOCKUP ── */
+    .mockup-wrap {
+      max-width: 900px; margin: 0 auto 0;
+      border-radius: 16px; overflow: hidden;
+      border: 1px solid var(--border);
+      box-shadow: 0 24px 80px rgba(0,0,0,.6);
+    }
+    .mockup-bar {
+      background: var(--surface2); padding: 10px 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .mock-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .mock-url {
+      flex: 1; background: var(--surface); border-radius: 6px;
+      padding: 4px 12px; font-size: 12px; color: var(--subdued);
+      margin: 0 12px;
+    }
+    .mockup-body {
+      background: var(--surface); padding: 24px;
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;
+    }
+    .mock-day {
+      background: var(--surface2); border-radius: 8px; padding: 10px 8px;
+      min-height: 120px;
+    }
+    .mock-day-head { font-size: 9px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+    .mock-post { border-radius: 6px; padding: 6px 7px; font-size: 8.5px; margin-bottom: 5px; }
+    .mock-post.ig { background: rgba(225,48,108,.15); color: #e1306c; border: 1px solid rgba(225,48,108,.2); }
+    .mock-post.li { background: rgba(10,102,194,.15); color: #5aa3e0; border: 1px solid rgba(10,102,194,.2); }
+    .mock-post.fb { background: rgba(24,119,242,.15); color: #60a5fa; border: 1px solid rgba(24,119,242,.2); }
+    .mock-post.tw { background: rgba(29,161,242,.15); color: #38bdf8; border: 1px solid rgba(29,161,242,.2); }
+    .mock-post.tt { background: rgba(255,0,80,.15); color: #ff6b9d; border: 1px solid rgba(255,0,80,.2); }
+    .mock-post .dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 3px; vertical-align: middle; }
+    .mock-approved { background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.2) !important; }
+
+    @media(max-width:640px){
+      .mockup-body { grid-template-columns: repeat(4,1fr); }
+      .mock-day:nth-child(n+5) { display: none; }
+      .stats-row { flex-direction: column; }
+      .stat-item { border-right: none; border-bottom: 1px solid var(--border); }
+      .stat-item:last-child { border-bottom: none; }
+      .quote-box { padding: 28px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="/landing">
+    <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="36" height="36" rx="9" fill="#313244"/>
+      <path d="M8 15 L7 5 L15 13 Z"  fill="#cba6f7"/>
+      <path d="M28 15 L29 5 L21 13 Z" fill="#cba6f7"/>
+      <path d="M9 13.5 L8.5 7 L14 12 Z"  fill="#f38ba8" opacity=".7"/>
+      <path d="M27 13.5 L27.5 7 L22 12 Z" fill="#f38ba8" opacity=".7"/>
+      <circle cx="18" cy="22" r="11" fill="#45475a"/>
+      <circle cx="13.5" cy="21" r="3" fill="#cdd6f4"/>
+      <circle cx="22.5" cy="21" r="3" fill="#cdd6f4"/>
+      <circle cx="13.5" cy="21" r="1.5" fill="#1e1e2e"/>
+      <circle cx="22.5" cy="21" r="1.5" fill="#1e1e2e"/>
+      <circle cx="14.3" cy="20" r=".8" fill="white"/>
+      <circle cx="23.3" cy="20" r=".8" fill="white"/>
+      <ellipse cx="18" cy="24.5" rx="1.2" ry=".9" fill="#f38ba8"/>
+      <path d="M16 26 Q18 27.8 20 26" stroke="#a6adc8" stroke-width=".9" fill="none" stroke-linecap="round"/>
+    </svg>
+    <div class="nav-logo-text"><span>Sozi</span>bot</div>
+  </a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how">So funktioniert's</a>
+    <a href="#cta">Preise</a>
+    <a href="/dashboard" style="color:var(--muted)">Dashboard</a>
+  </div>
+  <a class="nav-cta" href="/fragebogen">Kostenlos starten →</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">
+    <span class="dot"></span>
+    Powered by Claude AI · 5 Plattformen gleichzeitig
+  </div>
+  <h1>
+    Social Media auf <span class="grad">Autopilot</span> —<br>ohne Agentur
+  </h1>
+  <p>
+    Sozibot schreibt täglich fertige Posts für deine Marke, lernt was dir gefällt und postet automatisch auf allen Kanälen. In 3 Minuten eingerichtet.
+  </p>
+  <div class="hero-btns">
+    <a href="/fragebogen" class="btn-xl primary">🚀 Jetzt kostenlos starten</a>
+    <a href="#how" class="btn-xl secondary">Wie funktioniert's?</a>
+  </div>
+  <div class="platforms">
+    <div class="plat-badge">📸 Instagram</div>
+    <div class="plat-badge">👍 Facebook</div>
+    <div class="plat-badge">💼 LinkedIn</div>
+    <div class="plat-badge">🐦 X / Twitter</div>
+    <div class="plat-badge">🎵 TikTok</div>
+  </div>
+
+  <!-- Dashboard Mockup -->
+  <div style="width:100%;max-width:900px;margin-top:64px">
+    <div class="mockup-wrap">
+      <div class="mockup-bar">
+        <div class="mock-dot" style="background:#f38ba8"></div>
+        <div class="mock-dot" style="background:#f9e2af"></div>
+        <div class="mock-dot" style="background:#a6e3a1"></div>
+        <div class="mock-url">localhost:5000/vorschau/woche</div>
+      </div>
+      <div class="mockup-body">
+        <div class="mock-day">
+          <div class="mock-day-head">Mo</div>
+          <div class="mock-post ig mock-approved"><span class="dot" style="background:#e1306c"></span>Instagram ✓</div>
+          <div class="mock-post li mock-approved"><span class="dot" style="background:#5aa3e0"></span>LinkedIn ✓</div>
+        </div>
+        <div class="mock-day">
+          <div class="mock-day-head">Di</div>
+          <div class="mock-post fb"><span class="dot" style="background:#60a5fa"></span>Facebook</div>
+          <div class="mock-post tw"><span class="dot" style="background:#38bdf8"></span>X / Twitter</div>
+        </div>
+        <div class="mock-day">
+          <div class="mock-day-head">Mi</div>
+          <div class="mock-post ig"><span class="dot" style="background:#e1306c"></span>Instagram</div>
+          <div class="mock-post tt"><span class="dot" style="background:#ff6b9d"></span>TikTok</div>
+        </div>
+        <div class="mock-day">
+          <div class="mock-day-head">Do</div>
+          <div class="mock-post li"><span class="dot" style="background:#5aa3e0"></span>LinkedIn</div>
+          <div class="mock-post fb"><span class="dot" style="background:#60a5fa"></span>Facebook</div>
+        </div>
+        <div class="mock-day">
+          <div class="mock-day-head">Fr</div>
+          <div class="mock-post ig mock-approved"><span class="dot" style="background:#e1306c"></span>Instagram ✓</div>
+          <div class="mock-post tw"><span class="dot" style="background:#38bdf8"></span>X / Twitter</div>
+        </div>
+        <div class="mock-day">
+          <div class="mock-day-head">Sa</div>
+          <div class="mock-post tt"><span class="dot" style="background:#ff6b9d"></span>TikTok</div>
+        </div>
+        <div class="mock-day">
+          <div class="mock-day-head">So</div>
+          <div class="mock-post ig"><span class="dot" style="background:#e1306c"></span>Instagram</div>
+          <div class="mock-post fb"><span class="dot" style="background:#60a5fa"></span>Facebook</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<section style="padding:60px 5%">
+  <div class="stats-row">
+    <div class="stat-item">
+      <div class="stat-big">5</div>
+      <div class="stat-lbl">Plattformen gleichzeitig</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-big">3</div>
+      <div class="stat-lbl">KI-Varianten pro Post</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-big">3 Min</div>
+      <div class="stat-lbl">Einrichtungszeit</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-big">24/7</div>
+      <div class="stat-lbl">Automatisch aktiv</div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="section-label">So einfach geht's</div>
+  <h2 class="section-title">In 3 Schritten live</h2>
+  <p class="section-sub">Keine Agentur, kein technisches Vorwissen, kein Stress. Einfach ausfüllen — der Rest geht automatisch.</p>
+
+  <div class="steps-grid">
+    <div class="step-box">
+      <div class="step-num">1</div>
+      <h3>Marke beschreiben</h3>
+      <p>Beantworte 4 kurze Fragen über dein Unternehmen: Name, Branche, Tonalität, Plattformen. Dauert 3 Minuten.</p>
+    </div>
+    <div class="step-box">
+      <div class="step-num">2</div>
+      <h3>API-Zugänge einrichten</h3>
+      <p>Kopiere deinen Claude AI Key und die Tokens der gewünschten Plattformen in den sicheren Setup-Wizard.</p>
+    </div>
+    <div class="step-box">
+      <div class="step-num">3</div>
+      <h3>Fertig — Bot läuft</h3>
+      <p>Sozibot generiert ab sofort Posts, schlägt dir die besten Varianten vor und postet automatisch nach deinem Zeitplan.</p>
+    </div>
+    <div class="step-box">
+      <div class="step-num">✦</div>
+      <h3>Wird immer besser</h3>
+      <p>Je mehr du freigibst oder ablehnst, desto besser lernt die KI deinen Stil — vollautomatisch im Hintergrund.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features" style="background:rgba(30,30,46,.5)">
+  <div class="section-label">Was Sozibot kann</div>
+  <h2 class="section-title">Alles was du brauchst</h2>
+  <p class="section-sub">Keine Kompromisse. Volle Kontrolle wo du sie willst — voller Autopilot wo du ihn willst.</p>
+
+  <div class="features-grid">
+    <div class="feat-card">
+      <div class="feat-icon">🤖</div>
+      <h3>KI schreibt — du entscheidest</h3>
+      <p>Claude AI generiert 3 Varianten pro Post-Slot. Du wählst die beste aus oder gibst alles automatisch frei. Dein Tempo, deine Regeln.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🧠</div>
+      <h3>Lernt deinen Stil</h3>
+      <p>Nach jeder Freigabe oder Ablehnung lernt der Bot was dir gefällt. Nach 20 Freigaben analysiert Claude AI alle Posts und destilliert deine Marken-DNA.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">📅</div>
+      <h3>Wochenplanung auf einen Blick</h3>
+      <p>Sieh alle Posts der Woche auf einem Blick. Freigeben, ablehnen, bearbeiten oder neu generieren — alles mit einem Klick.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">✨</div>
+      <h3>KI-Verbesserung in Sekunden</h3>
+      <p>Post zu lang? Zu förmlich? Klick auf "Kürzer", "Persönlicher" oder gib eine eigene Anweisung — die KI verbessert in Echtzeit.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">⏱️</div>
+      <h3>Just-in-Time oder Woche im Voraus</h3>
+      <p>Wähle: Alle Posts sonntags generieren und in Ruhe durchgehen — oder kurz vor jedem Post eine Benachrichtigung bekommen.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">📊</div>
+      <h3>Performance-Tracking</h3>
+      <p>Der Bot verfolgt welche Posts gut performen und nutzt diese Daten um zukünftige Inhalte zu verbessern. Analytics direkt im Dashboard.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🔔</div>
+      <h3>Smarte Benachrichtigungen</h3>
+      <p>Nie wieder einen Post verpassen. Du wirst benachrichtigt wenn etwas deine Aufmerksamkeit braucht — alles andere läuft von alleine.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🔒</div>
+      <h3>Deine Daten — dein Server</h3>
+      <p>Sozibot läuft auf deiner eigenen Maschine oder deinem Server. Kein Cloud-Zwang, keine Drittanbieter die deine Posts sehen.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">📄</div>
+      <h3>Brand-Wissen per PDF</h3>
+      <p>Lade dein Brand-Manual oder Pitch-Deck hoch — Claude extrahiert automatisch alle relevanten Marken-Informationen.</p>
+    </div>
+  </div>
+</section>
+
+<!-- QUOTE -->
+<section id="cta" style="padding:80px 5%">
+  <div class="quote-box">
+    <div class="quote-text">
+      "Endlich Social Media der <span>einfach läuft</span>. Jeden Montag kurz drüberschauen, freigeben, fertig. Der Bot postet besser als ich es je manuell geschafft hätte."
+    </div>
+    <div class="quote-sub">— Früher Kunde · Social Media von 3h/Woche auf 15min reduziert</div>
+  </div>
+</section>
+
+<!-- CTA SECTION -->
+<div class="cta-section">
+  <h2>Bereit loszulegen?</h2>
+  <p>Richte deinen Sozibot in 3 Minuten ein — kostenlos, ohne Kreditkarte, ohne Verpflichtung.</p>
+  <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+    <a href="/fragebogen" class="btn-xl primary">🚀 Jetzt starten — kostenlos</a>
+  </div>
+  <div style="margin-top:20px;font-size:13px;color:var(--subdued)">
+    ✓ Keine Kreditkarte &nbsp;·&nbsp; ✓ In 3 Minuten bereit &nbsp;·&nbsp; ✓ Volle Kontrolle behalten
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="logo-small">
+    <span>Sozi</span>bot &nbsp;·&nbsp; <span style="color:var(--subdued);font-weight:400">Powered by Claude AI</span>
+  </div>
+  <div style="display:flex;gap:20px;align-items:center">
+    <a href="/fragebogen">Einrichten</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/kunden-vorschau/">Kunden-Vorschau</a>
+  </div>
+  <p>© 2025 Sozibot · Alle Rechte vorbehalten</p>
+</footer>
+
+<script>
+// Smooth scroll for nav links
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+</script>
+</body>
+</html>
